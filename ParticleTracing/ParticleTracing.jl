@@ -77,7 +77,7 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
 """
 @inline function propagate(xinit::Vector, vin::Vector, interp!::Function, getCollision::Function)
     x = deepcopy(xinit)
-    props = zeros(7) # x, y, vgx, vgy, vgz, T, ρ
+    props = zeros(8) # x, y, vgx, vgy, vgz, T, ρ, dmin
     interp!(props, x)
     xnext = deepcopy(x)
     v = deepcopy(vin)
@@ -105,6 +105,7 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
     end
 end
 
+interps = 0
 """
     SimulateParticles(geomFile, gridFile, nParticles, generateParticle)
 
@@ -119,15 +120,33 @@ function SimulateParticles(
 
     bounds = Matrix(CSV.read(geomFile, header = ["min","max"], skipto=6, limit=2,ignorerepeated=true,delim=' '))
     geom = Matrix(CSV.read(geomFile, header=["ID","x1","y1","x2","y2"],skipto=10, ignorerepeated=true,delim=' '))
-    grid = CSV.read(gridFile, header=["x","y","T","ρ","ρm","vx","vy","vz"],skipto=10,ignorerepeated=true,delim=' ')
+    griddf = CSV.read(gridFile, header=["x","y","T","ρ","ρm","vx","vy","vz"],skipto=10,ignorerepeated=true,delim=' ')
 
     # Reorder columns and only include grid cells with data
-    DataFrames.select!(grid, [:x, :y, :vx, :vy, :vz, :T, :ρ])
-    grid = grid[grid.T .> 0, :]
-    grid = Matrix(grid)
+    DataFrames.select!(griddf, [:x, :y, :vx, :vy, :vz, :T, :ρ])
+    grids = griddf[griddf.T .> 0, :]
+    griddf[!, :dmin] .= 0
+    grids = Matrix(griddf)
 
     # Make a tree for efficient nearest neighbor search
-    kdtree = KDTree(transpose(Matrix(grid[:,1:2])); leafsize=10)
+    kdtree = KDTree(transpose(Matrix(grids[:,1:2])); leafsize=10)
+
+    # For each point, find the 100 nearest neighbors and compute the distance of the closest point at which any of the parameters varies by more than 10%. Add that distance as a column to grid.
+
+    err = 0.2
+    for i in 1:size(grids)[1]
+        idxs, dists = knn(kdtree, grids[i,[1,2]], 100, true)
+        for (j, idx) in enumerate(idxs)
+            for k in [3,4,5,6,7]
+                if !(err*grids[i,k] < grids[idx,k] < (1+err)*grids[i,k])
+                    grids[i, 8] = dists[j]
+                    break
+                end
+            end
+        end
+    end
+
+    @printf("Mean dmin: %f\n", sum(grids[:,8]/size(grids)[1]))
 
     """
         interpolate!(props, x)
@@ -135,16 +154,21 @@ function SimulateParticles(
     Updates the gas properties props with the data from point x.
     """
     @inline function interpolate!(props::Vector, x::Vector)
-        # x, y, vgx, vgy, vgz, T, ρ
-        interp = view(grid, knn(kdtree, [x[3], sqrt(x[1]^2 + x[2]^2)], 1)[1][1], :)
-        props[1] = interp[1]            # x 
-        props[2] = interp[2]            # y
-        θ = atan(x[2],x[1])
-        props[3] = interp[4] * cos(θ)   # vgx
-        props[4] = interp[4] * sin(θ)   # vgy
-        props[5] = interp[3]            # vgz
-        props[6] = interp[6]            # T
-        props[7] = interp[7]            # ρ
+        # x, y, vgx, vgy, vgz, T, ρ, dmin
+        if sqrt((x[3] - props[1])^2 + (sqrt(x[1]^2 + x[2]^2) - props[2])^2) > props[8]
+            global interps
+            interps += 1
+            interp = view(grids, knn(kdtree, [x[3], sqrt(x[1]^2 + x[2]^2)], 1)[1][1], :)
+            props[1] = interp[1]            # x 
+            props[2] = interp[2]            # y
+            θ = atan(x[2],x[1])
+            props[3] = interp[4] * cos(θ)   # vgx
+            props[4] = interp[4] * sin(θ)   # vgy
+            props[5] = interp[3]            # vgz
+            props[6] = interp[6]            # T
+            props[7] = interp[7]            # ρ
+            props[8] = interp[8]
+        end
     end
 
     """
@@ -178,7 +202,8 @@ end
 
 # Set simulation parameters
 nParticles = 100000
-dir="/home/cal/Documents/DSMC_Simulations/4_3_20_flow_gap_length/flow_1.000_gap_0.003_len_0.010/data/"
+# dir="/home/cal/Documents/DSMC_Simulations/4_3_20_flow_gap_length/flow_1.000_gap_0.003_len_0.010/data/"
+dir="/home/cal/Documents/DSMC_Simulations/4_8_20_Yuiki_cell/2sccm/data/"
 generateParticle() = ([0.0, 0.0, 0.035], zeros(3))
 
 # Run simulation
@@ -199,5 +224,7 @@ header = ["x", "y", "z", "xnext", "ynext", "znext", "vx", "vy", "vz", "collides"
 # Compute timing statistics
 nthreads = Threads.nthreads()
 @printf("Time: %.3e\n",runtime)
-@printf("Time per particle (single thread): %.3e\n", nthreads*runtime/nParticles)
-@printf("Time per collision (single thread): %.3e\n", nthreads*runtime/sum(outputs[:,10]))
+@printf("Time per particle: %.3e\n", runtime/nParticles)
+@printf("Time per collision: %.3e\n", runtime/sum(outputs[:,10]))
+@printf("Interpolates: %.3e\n",interps)
+@printf("Collides: %.3e\n",sum(outputs[:,10]))
