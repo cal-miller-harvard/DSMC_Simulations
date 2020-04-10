@@ -13,13 +13,15 @@ const σ_BUFFER_GAS_PARTICLE = 100E-20 # m^2
 """
     collide!(v, vgx, vgy, vgz, T)
 
-Accepts as input the velocity of a particle v, the mean velocity of a buffer gas atom vgx, vgy, vgz, and the buffer gas temperature T. Computes the velocity of the particle after they undergo a collision, treating the particles as hard spheres and assuming a random scattering parameter and buffer gas atom velocity. Follows Appendices B and C of Boyd 2017. Note that v and vg are modified.
+Accepts as input the velocity of a particle v, the mean velocity of a buffer gas atom vgx, vgy, vgz, and the buffer gas temperature T. Computes the velocity of the particle after they undergo a collision, treating the particles as hard spheres and assuming a random scattering parameter and buffer gas atom velocity (assuming the particles are moving slower than the buffer gas atoms). Follows Appendices B and C of Boyd 2017. Note that v and vg are modified.
 """
 @inline function collide!(v::Vector, vgx::Number, vgy::Number, vgz::Number, T::Number)
-    boltzmann = sqrt(kB*T/MASS_BUFFER_GAS)
-    vgx += Random.randn() * boltzmann
-    vgy += Random.randn() * boltzmann
-    vgz += Random.randn() * boltzmann
+    vg = sqrt(-2 * kB * T / MASS_BUFFER_GAS * log(1-Random.rand()))
+    θv = π * Random.rand()
+    φv = 2 * π * Random.rand()
+    vgx += Random.randn() * vg * sin(θv) * cos(φv)
+    vgy += Random.randn() * vg * sin(θv) * sin(φv)
+    vgz += Random.randn() * vg * cos(θv)
     cosχ = 2*Random.rand() - 1
     sinχ = sqrt(1 - cosχ^2)
     θ = 2 * π * Random.rand()
@@ -193,6 +195,7 @@ function SimulateParticles(
     output_dim = length(propagate(zeros(3), zeros(3), interpolate!, (x,y)->true))
     outputs = zeros(nParticles, output_dim)
     Threads.@threads for i in 1:nParticles
+    # for i in 1:nParticles
         xpart, vpart = generateParticle()
         outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision)
     end
@@ -203,7 +206,7 @@ end
 # Set simulation parameters
 nParticles = 100000
 # dir="/home/cal/Documents/DSMC_Simulations/4_3_20_flow_gap_length/flow_1.000_gap_0.003_len_0.010/data/"
-dir="/home/cal/Documents/DSMC_Simulations/4_8_20_Yuiki_cell/2sccm/data/"
+dir="/home/cal/Documents/DSMC_Simulations/4_3_20_flow_gap_length/flow_4.000_gap_0.003_len_0.010/data/"
 generateParticle() = ([0.0, 0.0, 0.035], zeros(3))
 
 # Run simulation
