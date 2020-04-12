@@ -17,5 +17,5 @@ export JULIA_NUM_THREADS=threads
 
 echo "running...."
 
-/n/home03/calmiller/programs/julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -n 100000 ./cell.510001.surfs ./DS2FF.500000.DAT
+/n/home03/calmiller/programs/julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n 100000 ./cell.510001.surfs ./DS2FF.500000.DAT
 

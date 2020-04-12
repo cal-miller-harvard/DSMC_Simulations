@@ -37,7 +37,7 @@ export JULIA_NUM_THREADS=threads
 
 echo "running...."
 
-/n/home03/calmiller/programs/julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -n {} ./cell.510001.surfs ./DS2FF.500000.DAT
+/n/home03/calmiller/programs/julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n {} ./cell.510001.surfs ./DS2FF.500000.DAT
 
 """.format(nparts))
             os.system("sbatch particles.slurm")
