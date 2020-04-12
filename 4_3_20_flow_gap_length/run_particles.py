@@ -15,6 +15,7 @@ for flow in flows:
     for gap in gaps:
         for length in lengths:
             directory = "flow_{:.3f}_gap_{:.3f}_len_{:.3f}/data".format(flow, gap, length)
+            print("starting {}".format(directory))
             os.chdir(directory)
             with open(r"particles.slurm", "w") as f:
                 f.write("""#!/bin/bash
@@ -40,4 +41,4 @@ echo "running...."
 
 """.format(nparts))
             os.system("sbatch particles.slurm")
-            os.chdir("..")
+            os.chdir("/n/home03/calmiller/DSMC_Simulations/4_3_20_flow_gap_length")
