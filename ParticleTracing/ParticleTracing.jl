@@ -230,7 +230,7 @@ function parse_commandline()
         "-z"
             help = "axial position at which to spawn particles (m)"
             arg_type = Float64
-            default = 0.0035
+            default = 0.035
         "-r"
             help = "radial position at which to spawn particles (m)"
             arg_type = Float64
