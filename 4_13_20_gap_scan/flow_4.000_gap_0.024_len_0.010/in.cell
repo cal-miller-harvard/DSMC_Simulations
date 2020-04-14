@@ -1,29 +1,11 @@
-import os
-
-
-# Parameters:
-# 4 sccm
-# 0 to 12 mm gap
-# 3/8" to 1/2" second stage length
-
-flows = [4] # sccm
-gaps = [i*1E-3 for i in range(14,26,1)] # m
-lengths =[9.525E-3] # m
-for flow in flows:
-    for gap in gaps:
-        for length in lengths:
-            directory = "flow_{:.3f}_gap_{:.3f}_len_{:.3f}".format(flow, gap, length)
-            os.system("cp -rf template "+directory)
-            os.chdir(directory)
-            with open(r"in.cell", "w") as f:
-                f.write("""# 2d axial simulation of CBGB cell
+# 2d axial simulation of CBGB cell
 
 # Gap between 1st and second stage (mm)
-variable GAP equal {:.3f} # 2.7E-3
+variable GAP equal 0.024 # 2.7E-3
 # Length of second stage (mm)
-variable LEN equal {:.3f} # 11.1E-3
+variable LEN equal 0.010 # 11.1E-3
 # Input density: 1 sccm ~ 2E21?
-variable RHO equal "{:.3f} * 2E21"
+variable RHO equal "4.000 * 2E21"
 
 global		        fnum 1.0E12 cellmax 10000 gridcut 0.0 comm/sort yes
 seed	    	    12345
@@ -93,6 +75,3 @@ jump in.cell loop2
 # Save surfaces
 dump surfs surf all 1 data/cell.*.surfs id v1x v1y v2x v2y
 run 1
-""".format(gap, length, flow))
-            os.system("sbatch run.slurm")
-            os.chdir("..")
