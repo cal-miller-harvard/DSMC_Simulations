@@ -33,12 +33,8 @@ Accepts as input the velocity of a particle v, the mean velocity of a buffer gas
 end
 
 @inline function freePropagate(xnext::Vector, x::Vector, v::Vector, d::Number, α::Number)
-    normV = LinearAlgebra.norm(v)
-    if normV < 0.00001
-        normV = 0.00001
-    end
     if α != 0
-        t = d/normV
+        t = min(d/LinearAlgebra.norm(v), 1.0)
         sint = sin(sqrt(2)*α*t)
         cost = cos(sqrt(2)*α*t)
         xnext[1] = x[1]*cost + v[1]*sint/(sqrt(2)*α)
