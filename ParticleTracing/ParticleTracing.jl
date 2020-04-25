@@ -32,13 +32,27 @@ Accepts as input the velocity of a particle v, the mean velocity of a buffer gas
     v .= v ./ (MASS_PARTICLE + MASS_BUFFER_GAS)
 end
 
+@inline function freePropagate(xnext::Vector, x::Vector, v::Vector, d::Number, α::Number)
+    if α != 0
+        t = d/LinearAlgebra.norm(v)
+        sint = sin(sqrt(2)*α*t)
+        cost = cos(sqrt(2)*α*t)
+        xnext[1] = x[1]*cost + v[1]*sint/(sqrt(2)*α)
+        xnext[2] = x[2]*cost + v[2]*sint/(sqrt(2)*α)
+        xnext[3] = x[3] + v[3]*t
+        v[1] = v[1]*cost-2*x[1]*α*sint
+        v[2] = v[2]*cost-2*x[2]*α*sint
+    else
+        xnext .= x .+ d .* LinearAlgebra.normalize(v)
+    end
+end
 
 """
-    freePropagate(vrel, T, ρ)
+    freePath(vrel, T, ρ)
 
 Accepts as input the velocity of a particle relative to a buffer gas atom v, the buffer gas temperature T and the buffer gas density ρ. Draws a distance the particle travels before it hits a buffer gas atom from an exponential distribution, accounting for a velocity-dependent mean free path. Note that this assumes that the gas properties don't change significantly over a mean free path.
 """
-@inline function freePropagate(vrel::Number, T::Number, ρ::Number)
+@inline function freePath(vrel::Number, T::Number, ρ::Number)
     return -log(Random.rand()) * sqrt(vrel^2/(3*kB*T/MASS_BUFFER_GAS + vrel^2))/(ρ*σ_BUFFER_GAS_PARTICLE)
 end
 
@@ -73,11 +87,11 @@ end
 
 
 """
-    propagate(xinit, vin, interp!, getCollision)
+    propagate(xinit, vin, interp!, getCollision, alpha=0.0)
 
 Accepts as input the position of a particle xinit, its velocity v, the function interp!, which takes as input a position and a vector and updates the vector to describe the gas [x, y, vgx, vgy, vgz, T, ρ], and the function getCollision(x1, x2), which returns whether if the segment from x1 to x2 intersects geometry. Computes the path of the particle until it getCollision returns true. Returns a vector of simulation results with elements x, y, z, xnext, ynext, znext, vx, vy, vz, collides, time.
 """
-@inline function propagate(xinit::Vector, vin::Vector, interp!::Function, getCollision::Function)
+@inline function propagate(xinit::Vector, vin::Vector, interp!::Function, getCollision::Function, α=0.0)
     x = deepcopy(xinit)
     props = zeros(8) # x, y, vgx, vgy, vgz, T, ρ, dmin
     interp!(props, x)
@@ -94,8 +108,8 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
     while true
         interp!(props, x)
         vrel = sqrt((v[1] - props[3])^2 + (v[2] - props[4])^2 + (v[3] - props[5])^2)
-        dist = freePropagate(vrel, props[6], props[7])
-        xnext .= x .+ dist .* LinearAlgebra.normalize(v)
+        dist = freePath(vrel, props[6], props[7])
+        freePropagate(xnext, x, v, dist, α)
         if getCollision(x, xnext)
             return (x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time)
         else
@@ -118,7 +132,8 @@ function SimulateParticles(
     gridFile::AbstractString, 
     nParticles::Integer,
     generateParticle::Function,
-    print_stuff=true
+    print_stuff=true,
+    α=0.0
     )
 
     bounds = Matrix(CSV.read(geomFile, header = ["min","max"], skipto=6, limit=2,ignorerepeated=true,delim=' '))
@@ -198,7 +213,7 @@ function SimulateParticles(
     Threads.@threads for i in 1:nParticles
     # for i in 1:nParticles
         xpart, vpart = generateParticle()
-        outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision)
+        outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision, α)
         if print_stuff
             println(@sprintf("%d %e %e %e %e %e %e %e %e %e %d %e", i, 
             outputs[i,1], outputs[i,2], outputs[i,3], outputs[i,4], outputs[i,5], outputs[i,6], outputs[i,7], outputs[i,8], outputs[i,9], outputs[i,10], outputs[i,11]))
@@ -259,6 +274,10 @@ function parse_commandline()
             help = "collision cross section between buffer gas and particle (m^2); not currently supported"
             arg_type = Float64
             default = 100E-20
+        "--alpha"
+            help = "sqrt(v/m) for a harmonic trap of V(x,y,z) = v*(x^2+y^2)"
+            arg_type = Float64
+            default = 0.0
     end
 
     return parse_args(s)
@@ -287,7 +306,9 @@ function main()
         args["geom"],
         args["flow"],
         nParticles,
-        generateParticle)
+        generateParticle,
+        true,
+        args["alpha"])
     runtime = time() - start
 
     # Compute and display timing statistics
