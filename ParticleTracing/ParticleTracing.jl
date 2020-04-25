@@ -16,7 +16,7 @@ const σ_BUFFER_GAS_PARTICLE = 100E-20 # m^2
 Accepts as input the velocity of a particle v, the mean velocity of a buffer gas atom vgx, vgy, vgz, and the buffer gas temperature T. Computes the velocity of the particle after they undergo a collision, treating the particles as hard spheres and assuming a random scattering parameter and buffer gas atom velocity (assuming the particles are moving slower than the buffer gas atoms). Follows Appendices B and C of Boyd 2017. Note that v and vg are modified.
 """
 @inline function collide!(v::Vector, vgx::Number, vgy::Number, vgz::Number, T::Number)
-    vg = sqrt(-2 * kB * T / MASS_BUFFER_GAS * log(1-Random.rand()))
+    vg = sqrt(abs(-2 * kB * T / MASS_BUFFER_GAS * log(1-Random.rand())))
     θv = π * Random.rand()
     φv = 2 * π * Random.rand()
     vgx += Random.randn() * vg * sin(θv) * cos(φv)
