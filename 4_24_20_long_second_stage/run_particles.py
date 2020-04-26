@@ -8,7 +8,7 @@ import os
 
 flows = [4] # sccm
 gaps = [5E-3, 15E-3, 25E-3] # m
-lengths = [10E-3, 20E-3, 30E-3, 40E-3, 50E-3, 60E-3, 70E-3, 80E-3, 90E-3, 100E-2] # m
+lengths = [10E-3, 20E-3, 30E-3, 40E-3, 50E-3, 60E-3, 70E-3, 80E-3, 90E-3, 100E-3] # m
 alphas = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900]
 
 nparts = 100000
@@ -20,7 +20,7 @@ for flow in flows:
             print("starting {}".format(directory))
             os.chdir(directory)
             for alpha in alphas:
-                with open(r"particles.slurm", "w") as f:
+                with open(r"particles_{}.slurm".format(alpha), "w") as f:
                     f.write("""#!/bin/bash
 #SBATCH -n 4 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
@@ -42,6 +42,6 @@ echo "running...."
 
 /n/home03/calmiller/programs/julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n {} ./cell.510001.surfs ./DS2FF.500000.DAT --alpha {}
 
-""".format(nparts, alpha, alpha, alpha))
-            os.system("sbatch particles.slurm")
+""".format(alpha, alpha, nparts, alpha))
+                os.system("sbatch particles_{}.slurm".format(alpha))
             os.chdir("/n/home03/calmiller/DSMC_Simulations/4_24_20_long_second_stage")
