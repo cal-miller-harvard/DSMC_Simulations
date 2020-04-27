@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -n 8 # Number of cores requested
+#SBATCH -n 16 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
 #SBATCH -t 12:00:00 # Runtime in minutes
 #SBATCH -p shared # Partition to submit to
