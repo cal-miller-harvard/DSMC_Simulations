@@ -1,6 +1,14 @@
 using Distributed
-using Random, LinearAlgebra, NearestNeighbors
-using CSV, DataFrames, Printf, ArgParse
+using Random
+using LinearAlgebra
+using NearestNeighbors
+using CSV
+using DataFrames
+using Printf
+using ArgParse
+using OnlineStats
+
+import Base: convert
 
 # Constants
 const MASS_PARTICLE = 174 + 16 + 1    # AMU
@@ -9,6 +17,84 @@ const MASS_REDUCED = MASS_PARTICLE * MASS_BUFFER_GAS /
     (MASS_PARTICLE + MASS_BUFFER_GAS) # AMU
 const kB = 8314.46                    # AMU m^2 / (s^2 K)
 const σ_BUFFER_GAS_PARTICLE = 100E-20 # m^2
+
+# Data structures and functions for tracking trajectory statistics
+struct TrajStats
+    v::OnlineStat
+    t::OnlineStat
+end
+
+struct StatsArray
+    stats::Matrix{TrajStats}
+    minr::Float64
+    maxr::Float64
+    rbins::Int
+    minz::Float64
+    maxz::Float64
+    zbins::Int
+    rstep::Float64
+    zstep::Float64
+end
+
+@inline TrajStats() = TrajStats(CovMatrix(2), Variance())
+
+@inline function StatsArray(minr, maxr, rbins, minz, maxz, zbins)
+    stats = Array{TrajStats}(undef, rbins, zbins)
+    for i in 1:rbins
+        for j in 1:zbins
+            stats[i,j] = TrajStats()
+        end
+    end
+    return StatsArray(stats, minr, maxr, rbins, minz, maxz, zbins, rbins/(maxr-minr), zbins/(maxz-minz))
+end
+
+@inline function updateStats!(s::StatsArray, x, v, t)
+    r = sqrt(x[1]^2+x[2]^2)
+    ridx = min(s.rbins, 1+floor(Int, s.rstep*(r-s.minr)))
+    zidx = min(s.zbins, 1+floor(Int, s.zstep*(x[3]-s.minz)))
+    fit!(s.stats[ridx, zidx].v, [(-x[2]*v[1]+x[1]*v[2])/sqrt(x[1]^2+x[2]^2),v[3]])
+    fit!(s.stats[ridx, zidx].t, t)
+    return s.stats[ridx, zidx]
+end
+
+@inline function merge!(a::StatsArray, b::StatsArray)
+    for i in 1:a.rbins
+        for j in 1:a.zbins
+            OnlineStats.merge!(a.stats[i,j].v, b.stats[i,j].v)
+            OnlineStats.merge!(a.stats[i,j].t, b.stats[i,j].t)
+        end
+    end
+    return a
+end
+
+@inline function convert(::Type{Matrix}, s::StatsArray)
+    # r, z, n, t, tvar, vr, vz, vrcov, vzcov, vrvzcov
+    M = Array{Float64}(undef, s.rbins*s.zbins, 10)
+    idx = 1
+    for i in 1:s.rbins
+        for j in 1:s.zbins
+            stats = s.stats[i,j]
+            M[idx,1] = s.minr+(i-0.5)/s.rstep
+            M[idx,2] = s.minz+(j-0.5)/s.zstep
+            M[idx,3] = stats.t.n
+            M[idx,4] = stats.t.μ
+            M[idx,5] = stats.t.σ2
+            M[idx,6] = stats.v.b[1]
+            M[idx,7] = stats.v.b[2]
+            M[idx,8] = stats.v.A[1,1]
+            M[idx,9] = stats.v.A[2,2]
+            M[idx,10] = stats.v.A[1,2]
+            idx += 1
+        end
+    end
+    return M
+end
+
+@inline function convert(::Type{DataFrame}, s::StatsArray)
+    m = convert(Matrix, s)
+    df = DataFrame(m, [:r, :z, :n, :t, :tvar, :vr, :vz, :vrvar, :vzvar, :vrvzcov])
+    return df
+end
 
 """
     collide!(v, vgx, vgy, vgz, T)
@@ -32,7 +118,12 @@ Accepts as input the velocity of a particle v, the mean velocity of a buffer gas
     v .= v ./ (MASS_PARTICLE + MASS_BUFFER_GAS)
 end
 
-@inline function freePropagate(xnext::Vector, x::Vector, v::Vector, d::Number, ω::Number)
+"""
+    freePropagate!(xnext, x, v, d, ω)
+
+Updates xnext by propagating a particle at x with velocity v a distance d in a harmonic potential with frequency ω
+"""
+@inline function freePropagate!(xnext::Vector, x::Vector, v::Vector, d::Number, ω::Number)
     if ω != 0
         t = min(d/LinearAlgebra.norm(v), 1.0)
         sint = sin(sqrt(2)*ω*t)
@@ -91,7 +182,7 @@ end
 
 Accepts as input the position of a particle xinit, its velocity v, the function interp!, which takes as input a position and a vector and updates the vector to describe the gas [x, y, vgx, vgy, vgz, T, ρ], and the function getCollision(x1, x2), which returns whether if the segment from x1 to x2 intersects geometry. Computes the path of the particle until it getCollision returns true. Returns a vector of simulation results with elements x, y, z, xnext, ynext, znext, vx, vy, vz, collides, time.
 """
-@inline function propagate(xinit::Vector, vin::Vector, interp!::Function, getCollision::Function, ω=0.0)
+@inline function propagate(xinit::Vector, vin::Vector, interp!::Function, getCollision::Function, ω=0.0, stats=nothing)
     x = deepcopy(xinit)
     props = zeros(8) # x, y, vgx, vgy, vgz, T, ρ, dmin
     interp!(props, x)
@@ -109,7 +200,7 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
         interp!(props, x)
         vrel = sqrt((v[1] - props[3])^2 + (v[2] - props[4])^2 + (v[3] - props[5])^2)
         dist = freePath(vrel, props[6], props[7])
-        freePropagate(xnext, x, v, dist, ω)
+        freePropagate!(xnext, x, v, dist, ω)
         if getCollision(x, xnext) != 0
             return (x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time)
         else
@@ -118,6 +209,9 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
         end
         x .= xnext
         collide!(v, props[3], props[4], props[5], props[6])
+        if !isnothing(stats)
+            updateStats!(stats, x, v, time)
+        end
     end
 end
 
@@ -134,7 +228,11 @@ function SimulateParticles(
     generateParticle::Function,
     print_stuff=true,
     ω=0.0,
-    saveall=0
+    saveall=0,
+    savestats=nothing,
+    saveexitstats=nothing,
+    rbins=100,
+    zbins=100
     )
 
     bounds = Matrix(CSV.read(geomFile, header = ["min","max"], skipto=6, limit=2,ignorerepeated=true,delim=' '))
@@ -211,17 +309,31 @@ function SimulateParticles(
 
     output_dim = length(propagate(zeros(3), zeros(3), interpolate!, (x,y)->true))
     outputs = zeros(nParticles, output_dim)
+    if !isnothing(savestats)
+        allstats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
+    end
+    if !isnothing(saveexitstats)
+        boundstats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
+
+    end
     Threads.@threads for i in 1:nParticles
-    # for i in 1:nParticles
+        stats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
         xpart, vpart = generateParticle()
-        outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision, ω)
-        if print_stuff && (saveall != 0 || 2 == getCollision(outputs[i,[1,2,3]], outputs[i,[4,5,6]]))
+        outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision, ω, stats)
+        colltype = getCollision(outputs[i,[1,2,3]], outputs[i,[4,5,6]])
+        if !isnothing(savestats)
+            merge!(allstats, stats)
+        end
+        if colltype == 2 && !isnothing(saveexitstats)
+            merge!(boundstats, stats)
+        end
+        if print_stuff && (saveall != 0 || colltype == 2)
             println(@sprintf("%d %e %e %e %e %e %e %e %e %e %d %e", i, 
             outputs[i,1], outputs[i,2], outputs[i,3], outputs[i,4], outputs[i,5], outputs[i,6], outputs[i,7], outputs[i,8], outputs[i,9], outputs[i,10], outputs[i,11]))
         end
     end
     
-    return outputs
+    return outputs, boundstats, allstats
 end
 
 """
@@ -283,6 +395,14 @@ function parse_commandline()
             help = "save all particles or just those that leave the cell"
             arg_type = Int
             default = 0
+        "--stats"
+            help = "filename to save average properties of trajectories"
+            arg_type = String
+            default = nothing
+        "--exitstats"
+            help = "filename to save average properties of trajectories where the particle hits the simulation boundary"
+            arg_type = String
+            default = nothing
     end
 
     return parse_args(s)
@@ -306,24 +426,35 @@ function main()
         [args["vr"] + Random.randn() * boltzmann, Random.randn() * boltzmann, args["vz"] + Random.randn() * boltzmann])
 
     # Set simulation parameters and run simulation
+    nthreads = Threads.nthreads()
+    @printf(stderr, "Threads: %d\n", nthreads)
     start = time()
-    outputs=SimulateParticles(
+    outputs, boundstats, allstats = SimulateParticles(
         args["geom"],
         args["flow"],
         nParticles,
         generateParticle,
         true,
         args["omega"],
-        args["saveall"])
+        args["saveall"],
+        !isnothing(args["stats"]),
+        !isnothing(args["exitstats"]))
     runtime = time() - start
+    if !isnothing(args["stats"])
+        CSV.write(args["stats"], convert(DataFrame, allstats))
+    end
+    if !isnothing(args["exitstats"])
+        CSV.write(args["exitstats"], convert(DataFrame, boundstats))
+    end
 
     # Compute and display timing statistics
-    nthreads = Threads.nthreads()
     @printf(stderr, "Time: %.3e\n",runtime)
     @printf(stderr, "Time per particle: %.3e\n", runtime/nParticles)
     @printf(stderr, "Time per collision: %.3e\n", runtime/sum(outputs[:,10]))
     @printf(stderr, "Interpolates: %.3e\n",interps)
     @printf(stderr, "Collides: %.3e\n",sum(outputs[:,10]))
+
+    return allstats
 end
 
-main()
+allstats = main()
