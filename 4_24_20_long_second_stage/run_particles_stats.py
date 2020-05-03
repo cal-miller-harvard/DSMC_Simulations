@@ -40,8 +40,8 @@ export JULIA_NUM_THREADS=threads
 
 echo "running...."
 
-/n/home03/calmiller/programs/julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n {} ./cell.510001.surfs ./DS2FF.500000.DAT --omega {} --stats ./stats.csv --exitstats ./exitstats.csv
+/n/home03/calmiller/programs/julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n {} ./cell.510001.surfs ./DS2FF.500000.DAT --omega {} --stats ./stats_omega_{}.csv --exitstats ./exitstats_omega_{}.csv
 
-""".format(alpha, alpha, nparts, alpha))
+""".format(alpha, alpha, nparts, alpha,alpha,alpha))
                 os.system("sbatch particles_{}.slurm".format(alpha))
             os.chdir("/n/home03/calmiller/DSMC_Simulations/4_24_20_long_second_stage")
