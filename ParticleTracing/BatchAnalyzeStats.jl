@@ -106,31 +106,60 @@ cd(plotdir)
 sx = 600
 sy = 400
 rmax = 0.015
-yrange = (0.0, 100.0)
+yrange = (0.0, 70.0)
 xrange = (0.0, 0.30)
+lcell = 0.06509
+lend = 2.1E-3
 
 colors = palette(:default)
 
 for (i, gap) in enumerate(gaps)
-    plt0 = plot(xlabel="z", ylabel="vz", ylims=yrange, xlims=xrange)
-    plt300 = plot(xlabel="z", ylabel="vz", ylims=yrange, xlims=xrange)
-    vline!(plt0, [0.06509, 0.06509+gap],label="",color=:black)
-    vline!(plt300, [0.06509, 0.06509+gap],label="",color=:black)
+    vzplt0 = plot(xlabel="z", ylabel="vz", ylims=yrange, xlims=xrange)
+    vzplt300 = plot(xlabel="z", ylabel="vz", ylims=yrange, xlims=xrange)
+    vline!(vzplt0, [lcell, lcell+gap],label="",color=:black)
+    vline!(vzplt300, [lcell, lcell+gap],label="",color=:black)
     for (j, len) in enumerate(lens)
         d0 = data[(data.omega .== 0) .& (data.gap .== gap) .& (data.len .== len) .& (data.r .< rmax) .& (data.n .> 0),:]
         d300 = data[(data.omega .== 300) .& (data.gap .== gap) .& (data.len .== len) .& (data.r .< rmax) .& (data.n .> 0),:]
         zs =sort(unique(d0.z))
         vz0 = [mean(d0.vz[d0.z .== z]) for z in zs]
         vz300 = [mean(d300.vz[d300.z .== z]) for z in zs]
-        plot!(plt0, zs, vz0, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 0, gap: %.0f mm", 1000*gap),color=colors[j])
-        plot!(plt300, zs, vz300, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 300, gap: %.0f mm", 1000*gap),color=colors[j])
-        vline!(plt0, [0.06509+gap+len+2.1E-3],label="",color=colors[j])
-        vline!(plt300, [0.06509+gap+len+2.1E-3],label="",color=colors[j])
+        plot!(vzplt0, zs, vz0, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 0, gap: %.0f mm", 1000*gap),color=colors[j])
+        plot!(vzplt300, zs, vz300, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 300, gap: %.0f mm", 1000*gap),color=colors[j])
+        vline!(vzplt0, [lcell+gap+len+lend],label="",color=colors[j])
+        vline!(vzplt300, [lcell+gap+len+lend],label="",color=colors[j])
     end
-    plot(plt0,plt300,
+    plot(vzplt0,vzplt300,
     layout=@layout grid(2,1))
-    savefig(@sprintf("stat_gap_%.3f.pdf", gap))
+    savefig(@sprintf("vz_stat_gap_%.3f.pdf", gap))
 
+end
+
+
+xrange = (0.0, 0.30)
+yrange = (0.0, 6.0)
+
+colors = palette(:default)
+
+for (i, gap) in enumerate(gaps)
+    nplot0 = plot(xlabel="z", ylabel="log10(ncoll)", ylims=yrange, xlims=xrange)
+    nplot300 = plot(xlabel="z", ylabel="log10(ncoll)", ylims=yrange, xlims=xrange)
+    vline!(nplot0, [lcell, lcell+gap],label="",color=:black)
+    vline!(nplot300, [lcell, lcell+gap],label="",color=:black)
+    for (j, len) in enumerate(lens)
+        d0 = data[(data.omega .== 0) .& (data.gap .== gap) .& (data.len .== len) .& (data.r .< rmax) .& (data.n .> 0),:]
+        d300 = data[(data.omega .== 300) .& (data.gap .== gap) .& (data.len .== len) .& (data.r .< rmax) .& (data.n .> 0),:]
+        zs =sort(unique(d0.z))
+        n0 = [log10(mean(d0.n[d0.z .== z])) for z in zs]
+        n300 = [log10(mean(d300.n[d300.z .== z])) for z in zs]
+        plot!(nplot0, zs, n0, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 0, gap: %.0f mm", 1000*gap),color=colors[j])
+        plot!(nplot300, zs, n300, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 300, gap: %.0f mm", 1000*gap),color=colors[j])
+        vline!(nplot0, [lcell+gap+len+lend],label="",color=colors[j])
+        vline!(nplot300, [lcell+gap+len+lend],label="",color=colors[j])
+    end
+    plot(nplot0,nplot300,
+    layout=@layout grid(2,1))
+    savefig(@sprintf("n_stat_gap_%.3f.pdf", gap))
 end
 
 cd(program_dir)
