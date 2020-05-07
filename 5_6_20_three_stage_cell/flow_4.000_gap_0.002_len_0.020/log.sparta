@@ -1,0 +1,222 @@
+SPARTA (24 Jan 2020)
+# 2d axial simulation of CBGB cell
+
+# Gap between 1st and second stage (mm)
+variable GAP equal 0.002 # 2.7E-3
+# Length of second stage (mm)
+variable LEN equal 0.020 # 11.1E-3
+# Input density: 1 sccm ~ 2E21?
+variable RHO equal "4.000 * 2E21"
+
+global		        fnum 1.0E12 cellmax 10000 gridcut 0.0 comm/sort yes
+seed	    	    12345
+dimension   	    2
+units               si
+timestep 	        1E-6
+
+species		        he4.species He4
+mixture		        He4 He4 nrho $(v_RHO) vstream 26.2 0 0 temp 2.0
+mixture		        He4 He4 nrho 8e+21 vstream 26.2 0 0 temp 2.0
+collide             vss He4 He4.vss #kk
+
+# read_restart data/cell.restart.*
+
+boundary	        o ao p
+create_box  	    0 0.35 0 0.03 -0.1 0.1
+Created orthogonal box = (0 0 -0.1) to (0.35 0.03 0.1)
+create_grid 	    20 20 1
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (../grid.cpp:415)
+Created 400 child grid cells
+  parent cells = 1
+  CPU time = 0.00220589 secs
+  create/ghost percent = 83.3937 16.6063
+balance_grid        rcb cell
+Balance grid migrated 365 cells
+  CPU time = 0.00125 secs
+  reassign/sort/migrate/ghost percent = 58.1577 2.59921 18.3505 20.8926
+
+read_surf           data.cell
+  12 points
+  12 lines
+  0 0.06509 xlo xhi
+  0 0.0254 ylo yhi
+  0 0 zlo zhi
+  0.00159 min line length
+  42 = cells with surfs
+  74 = total surfs in all grid cells
+  4 = max surfs in one grid cell
+  0.0908571 = min surf-size/cell-size ratio
+  0 0 = number of pushed cells
+  42 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  356 2 42 = cells outside/inside/overlapping surfs
+  30 12 = surf cells with 1,2,etc splits
+  0.000929289 0.000929289 = cell-wise and global flow volume
+  CPU time = 0.00983046 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 84.7548 1.26985 0.455299 11.5657 1.95434 3.4356 0.118174
+  surf2grid time = 0.00113696 secs
+  map/rvous1/rvous2/split percent = 2.27562 0 0 86.9986
+group       inlet surf id 12
+1 surfaces in group inlet
+fix		    in emit/surf He4 inlet
+
+read_surf           data.diffuser group diffuser
+  4 points
+  16 lines
+  0.00953 0.0127 xlo xhi
+  0 0.00953 ylo yhi
+  0 0 zlo zhi
+  0.00317 min line length
+  42 = cells with surfs
+  90 = total surfs in all grid cells
+  6 = max surfs in one grid cell
+  0.0908571 = min surf-size/cell-size ratio
+  0 0 = number of pushed cells
+  42 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  356 2 42 = cells outside/inside/overlapping surfs
+  24 18 = surf cells with 1,2,etc splits
+  0.000928384 0.000928384 = cell-wise and global flow volume
+  CPU time = 0.00980638 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 85.9432 1.40596 0.0697301 10.6784 1.90272 3.09994 0.100751
+  surf2grid time = 0.00104717 secs
+  map/rvous1/rvous2/split percent = 4.12609 39.9852 0.318765 46.8784
+read_surf           data.secondstage atrans $(v_GAP - 2.7E-3) 0 0 group secondstage
+read_surf           data.secondstage atrans -0.00070000000000000010131 0 0 group secondstage
+  6 points
+  22 lines
+  0.06709 0.07979 xlo xhi
+  0.0045 0.02223 ylo yhi
+  0 0 zlo zhi
+  0.00159 min line length
+  55 = cells with surfs
+  123 = total surfs in all grid cells
+  6 = max surfs in one grid cell
+  0.0908571 = min surf-size/cell-size ratio
+  0 0 = number of pushed cells
+  55 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  343 2 55 = cells outside/inside/overlapping surfs
+  31 24 = surf cells with 1,2,etc splits
+  0.000914398 0.000914398 = cell-wise and global flow volume
+  CPU time = 0.00882931 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 91.8791 1.42073 0.100608 4.21907 2.38053 3.11968 0.119205
+  surf2grid time = 0.000372515 secs
+  map/rvous1/rvous2/split percent = 5.49911 43.0461 0.802384 26.5893
+
+read_surf           data.mesh atrans $(v_GAP - 2.7E-3) 0 0 group mesh
+read_surf           data.mesh atrans -0.00070000000000000010131 0 0 group mesh
+  4 points
+  26 lines
+  0.0798 0.08027 xlo xhi
+  0.00036 0.00085 ylo yhi
+  0 0 zlo zhi
+  0.00047 min line length
+  56 = cells with surfs
+  127 = total surfs in all grid cells
+  6 = max surfs in one grid cell
+  0.0268571 = min surf-size/cell-size ratio
+  0 0 = number of pushed cells
+  56 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  342 2 56 = cells outside/inside/overlapping surfs
+  32 24 = surf cells with 1,2,etc splits
+  0.000914397 0.000914397 = cell-wise and global flow volume
+  CPU time = 0.00880914 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 92.0845 1.30786 0.0899747 4.32484 2.19286 3.07225 0.0416272
+  surf2grid time = 0.000380981 secs
+  map/rvous1/rvous2/split percent = 5.15931 40.4763 0.773529 28.5765
+read_surf           data.mesh atrans $(v_GAP - 2.7E-3) 1.21E-3 0 group mesh
+read_surf           data.mesh atrans -0.00070000000000000010131 1.21E-3 0 group mesh
+  4 points
+  30 lines
+  0.0798 0.08027 xlo xhi
+  0.00157 0.00206 ylo yhi
+  0 0 zlo zhi
+  0.00047 min line length
+  57 = cells with surfs
+  131 = total surfs in all grid cells
+  6 = max surfs in one grid cell
+  0.0268571 = min surf-size/cell-size ratio
+  0 0 = number of pushed cells
+  57 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  341 2 57 = cells outside/inside/overlapping surfs
+  33 24 = surf cells with 1,2,etc splits
+  0.000914395 0.000914395 = cell-wise and global flow volume
+  CPU time = 0.00325347 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 79.6238 3.6044 0.249795 11.2107 5.31132 8.72679 0.492121
+  surf2grid time = 0.000364735 secs
+  map/rvous1/rvous2/split percent = 5.23092 42.3011 1.01882 26.2931
+read_surf           data.mesh atrans $(v_GAP - 2.7E-3) 2.42E-3 0 group mesh
+read_surf           data.mesh atrans -0.00070000000000000010131 2.42E-3 0 group mesh
+  4 points
+  34 lines
+  0.0798 0.08027 xlo xhi
+  0.00278 0.00327 ylo yhi
+  0 0 zlo zhi
+  0.00047 min line length
+  57 = cells with surfs
+  137 = total surfs in all grid cells
+  7 = max surfs in one grid cell
+  0.0268571 = min surf-size/cell-size ratio
+  0 0 = number of pushed cells
+  57 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  341 2 57 = cells outside/inside/overlapping surfs
+  33 24 = surf cells with 1,2,etc splits
+  0.00091439 0.00091439 = cell-wise and global flow volume
+  CPU time = 0.00325765 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 79.3368 3.91797 0.225162 11.1805 5.33964 8.33597 0.374871
+  surf2grid time = 0.000364221 secs
+  map/rvous1/rvous2/split percent = 5.23803 41.6538 0.846739 26.5034
+read_surf           data.mesh atrans $(v_GAP - 2.7E-3) 3.63E-3 0 group mesh
+read_surf           data.mesh atrans -0.00070000000000000010131 3.63E-3 0 group mesh
+  4 points
+  38 lines
+  0.0798 0.08027 xlo xhi
+  0.00399 0.00448 ylo yhi
+  0 0 zlo zhi
+  0.00047 min line length
+  57 = cells with surfs
+  141 = total surfs in all grid cells
+  10 = max surfs in one grid cell
+  0.0268571 = min surf-size/cell-size ratio
+  0 0 = number of pushed cells
+  57 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  341 2 57 = cells outside/inside/overlapping surfs
+  33 24 = surf cells with 1,2,etc splits
+  0.000914384 0.000914384 = cell-wise and global flow volume
+  CPU time = 0.00328391 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 78.8993 3.84481 0.244922 11.5468 5.46422 8.02949 0.315417
+  surf2grid time = 0.000379186 secs
+  map/rvous1/rvous2/split percent = 4.93135 41.5912 1.02193 28.4858
+
+region ssbody cylinder x 0 0 1 $(v_GAP + 65.09E-3 + 1E-3) 1
+region ssbody cylinder x 0 0 1 0.068089999999999997748 1
+group ssbody surf region ssbody all
+19 surfaces in group ssbody
+move_surf ssbody trans $(v_LEN-11.11E-3) 0 0 connect yes
+move_surf ssbody trans 0.0088900000000000003325 0 0 connect yes
+Moving surfs ...
+  65 = cells with surfs
+  144 = total surfs in all grid cells
+  9 = max surfs in one grid cell
+  0.0268571 = min surf-size/cell-size ratio
+  0 0 = number of pushed cells
+  65 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  328 7 65 = cells outside/inside/overlapping surfs
+  47 18 = surf cells with 1,2,etc splits
+  0.000905087 0.000905087 = cell-wise and global flow volume
+  CPU time = 0.000866216 secs
+  sort/surf2grid/ghost/inout/particle percent = 0.443307 50.2058 17.488 30.3744 1.48843
+
+read_surf           data.secondstage atrans $(2*(v_GAP - 2.7E-3) + v_LEN + 2.07E-3) 0 0 group secondstage
+read_surf           data.secondstage atrans 0.020669999999999997403 0 0 group secondstage
+  6 points
+  44 lines
+  0.08846 0.10116 xlo xhi
+  0.0045 0.02223 ylo yhi
+  0 0 zlo zhi
+  0.00159 min line length
+  65 = cells with surfs
+  175 = total surfs in all grid cells
+  12 = max surfs in one grid cell
+  0.0268571 = min surf-size/cell-size ratio
+  0 0 = number of pushed cells
+  65 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+ERROR: Surface check failed with 4 points on lines (../surf.cpp:1582)
