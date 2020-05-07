@@ -16,7 +16,7 @@ nparts = 500000
 for flow in flows:
     for gap in gaps:
         for length in lengths:
-            directory = "/n/home03/calmiller/DSMC_Simulations/4_24_20_long_second_stage/flow_{:.3f}_gap_{:.3f}_len_{:.3f}/data".format(flow, gap, length)
+            directory = "/n/home03/calmiller/DSMC_Simulations/5_6_20_three_stage_cell/flow_{:.3f}_gap_{:.3f}_len_{:.3f}/data".format(flow, gap, length)
             print("starting {}".format(directory))
             os.chdir(directory)
             for alpha in alphas:
@@ -44,4 +44,4 @@ echo "running...."
 
 """.format(alpha, alpha, nparts, alpha,alpha,alpha))
                 os.system("sbatch particles_{}.slurm".format(alpha))
-            os.chdir("/n/home03/calmiller/DSMC_Simulations/4_24_20_long_second_stage")
+            os.chdir("/n/home03/calmiller/DSMC_Simulations/5_6_20_three_stage_cell")
