@@ -422,7 +422,7 @@ function main()
     # Define particle generation
     boltzmann = sqrt(kB*args["T"]/MASS_PARTICLE)
     # generateParticle() = (
-        [args["r"], 0.0, args["z"]],
+#        [args["r"], 0.0, args["z"]],
         # [args["vr"] + Random.randn() * boltzmann, Random.randn() * boltzmann, args["vz"] + Random.randn() * boltzmann])
     generateParticle() = (
         [args["r"] + Random.randn()*0.005/3, Random.randn()*0.005/3, args["z"] + Random.randn()*0.005/3],

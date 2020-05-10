@@ -102,7 +102,7 @@ dump surfs surf all 1 data/cell.*.surfs id v1x v1y v2x v2y
 run 1
 
 """.format(flow, nsim))
-    with open(r"in.cell", "w") as f:
+    with open(r"run.slurm", "w") as f:
         f.write("""#!/bin/bash
 #SBATCH -n 16 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
