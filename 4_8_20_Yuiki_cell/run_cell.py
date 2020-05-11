@@ -20,7 +20,7 @@ for flow in flows:
     for omega in omegas:
         with open(r"particles_{}.slurm".format(omega), "w") as f:
             f.write("""#!/bin/bash
-#SBATCH -n 16 # Number of cores requested
+#SBATCH -n 8 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
 #SBATCH -t 0-08:00 # Runtime in minutes
 #SBATCH -p shared # Partition to submit to
@@ -104,7 +104,7 @@ run 1
 """.format(3.0, 1.49E11*flow))
     with open(r"run.slurm", "w") as f:
         f.write("""#!/bin/bash
-#SBATCH -n 16 # Number of cores requested
+#SBATCH -n 8 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
 #SBATCH -t 0-04:00 # Runtime in minutes
 #SBATCH -p shared # Partition to submit to
@@ -112,6 +112,8 @@ run 1
 #SBATCH --open-mode=append
 #SBATCH -o spa_%j.out # Standard out goes to this file
 #SBATCH -e spa_%j.err # Standard err goes to this filehostname
+
+echo "loading things..."
 
 module load intel/19.0.5-fasrc01 openmpi/4.0.2-fasrc01 fftw/3.3.8-fasrc01 cmake/3.12.1-fasrc01 Anaconda3/2019.10 python/3.7.7-fasrc01
 module list

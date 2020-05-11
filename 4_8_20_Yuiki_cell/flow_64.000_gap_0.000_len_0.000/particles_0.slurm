@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH -n 16 # Number of cores requested
+#SBATCH -n 8 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
-#SBATCH -t 2:00:00 # Runtime in minutes
+#SBATCH -t 0-08:00 # Runtime in minutes
 #SBATCH -p shared # Partition to submit to
 #SBATCH --mem-per-cpu 2048 # Memory per cpu in MB (see also ?mem-per-cpu)
 #SBATCH --open-mode=append
@@ -13,11 +13,11 @@ module list
 
 export OMP_PROC_BIND=spread
 export OMP_PLACES=threads
-export JULIA_NUM_THREADS=threads
+export JULIA_NUM_THREADS=$SLURM_CPUS_ON_NODE
 
 cd data
 pwd
 echo "running...."
 
-/n/home03/calmiller/programs/julia /n/home03/calmiller/DSMC_Simulations/4_8_20_Yuiki_cell/ParticleTracingYuiki.jl -z 0.049 -T 4.0 -n 100000 ./cell.510001.surfs ./DS2FF.500000.DAT --omega 0 --stats ./stats_omega_0.csv --exitstats ./exitstats_omega_0.csv
+/n/home03/calmiller/programs/julia /n/home03/calmiller/DSMC_Simulations/4_8_20_Yuiki_cell/ParticleTracingYuiki.jl -z 0.049 -T 4.0 -n 200000 ./cell.510001.surfs ./DS2FF.500000.DAT --omega 0 --stats ./stats_omega_0.csv --exitstats ./exitstats_omega_0.csv
 
