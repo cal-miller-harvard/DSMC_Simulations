@@ -1,4 +1,4 @@
-using CSV, StatsPlots, Printf, DataFrames, Plots
+using CSV, StatsPlots, Printf, DataFrames, Plots, Statistics
 
 program_dir = "/home/cal/Documents/DSMC_Simulations/4_8_20_Yuiki_cell"
 data_dir = "/home/cal/Documents/DSMC_Simulations/4_8_20_Yuiki_cell"
@@ -70,6 +70,7 @@ cd(program_dir)
 npts = 100000
 flows = sort(unique(data.flow))
 extractions = zero(flows)
+medians = zero(flows)
 vmax = maximum(data.vz)
 
 plotdir = data_dir*"/summary"
@@ -81,6 +82,7 @@ bins = 0:vmax/100:vmax
 for (i, f) in enumerate(flows)
     vzs = data[data.flow .== f,:].vz
     extractions[i] = length(vzs)/npts
+    medians[i] = median(vzs)
     stephist!(vzs, label="$f sccm", bins=bins, normalize=:probability)
 end
 display(plt)
@@ -89,5 +91,9 @@ savefig("vz.pdf")
 plt = plot(flows, extractions, xlabel="flow (sccm)", ylabel="extraction", xscale=:log10)
 display(plt)
 savefig("extraction.pdf")
+
+plt = plot(flows, medians, xlabel="flow (sccm)", ylabel="median vz (m/s)", xscale=:log10)
+display(plt)
+savefig("medianvz.pdf")
 
 cd(program_dir)
