@@ -68,7 +68,7 @@ balance_grid        rcb cell
 
 read_surf           data.cell
 group       inlet surf id 1
-fix		    in emit/surf He4 inlet n v_NPERSTEP nevery 1 perspecies no
+fix		    in emit/surf He4 inlet n $(v_NPERSTEP) perspecies no
 
 surf_collide	    diffuse diffuse 4.0 1.0
 surf_modify         all collide diffuse
