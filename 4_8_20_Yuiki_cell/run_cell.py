@@ -101,7 +101,7 @@ jump in.cell loop2
 dump surfs surf all 1 data/cell.*.surfs id v1x v1y v2x v2y
 run 1
 
-""".format(flow*4.48E17*1E-6/nsim, nsim))
+""".format(3.0, 1.49E11*flow))
     with open(r"run.slurm", "w") as f:
         f.write("""#!/bin/bash
 #SBATCH -n 16 # Number of cores requested
