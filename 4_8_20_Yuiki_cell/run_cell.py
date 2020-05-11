@@ -8,7 +8,7 @@ import os
 
 flows = [0.5,1,2,4,8,16,32,64,128,200] # sccm
 omegas = [0]
-nparts = 500000
+nparts = 200000
 gap = 0
 length = 0
 
@@ -22,7 +22,7 @@ for flow in flows:
             f.write("""#!/bin/bash
 #SBATCH -n 16 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
-#SBATCH -t 2:00:00 # Runtime in minutes
+#SBATCH -t 0-08:00 # Runtime in minutes
 #SBATCH -p shared # Partition to submit to
 #SBATCH --mem-per-cpu 2048 # Memory per cpu in MB (see also ?mem-per-cpu)
 #SBATCH --open-mode=append
@@ -34,7 +34,7 @@ module list
 
 export OMP_PROC_BIND=spread
 export OMP_PLACES=threads
-export JULIA_NUM_THREADS=threads
+export JULIA_NUM_THREADS=$SLURM_CPUS_ON_NODE
 
 cd data
 pwd
@@ -47,7 +47,7 @@ echo "running...."
         f.write("""# 2d axial simulation of CBGB cell - Yuiki's T design
 
 # Input density: 1 sccm ~ 2E21?
-variable RHO equal "{:.3f} * 2E21"
+variable NPERSTEP equal "{:.3f}"
 
 global		        fnum {:.3e} cellmax 10000 gridcut 0.0 comm/sort yes
 seed	    	    12345
@@ -56,7 +56,7 @@ units               si
 timestep 	        1E-6
 
 species		        he4.species He4
-mixture		        He4 He4 nrho $(v_RHO) vstream 26.2 0 0 temp 4.0
+mixture		        He4 He4 nrho 2E21 vstream 26.2 0 0 temp 4.0
 collide             vss He4 He4.vss #kk
 
 # read_restart data/cell.restart.*
@@ -68,7 +68,7 @@ balance_grid        rcb cell
 
 read_surf           data.cell
 group       inlet surf id 1
-fix		    in emit/surf He4 inlet
+fix		    in emit/surf He4 inlet n v_NPERSTEP nevery 1 perspecies no
 
 surf_collide	    diffuse diffuse 4.0 1.0
 surf_modify         all collide diffuse
@@ -101,12 +101,12 @@ jump in.cell loop2
 dump surfs surf all 1 data/cell.*.surfs id v1x v1y v2x v2y
 run 1
 
-""".format(flow, nsim))
+""".format(flow*4.48E17*1E-6/nsim, nsim))
     with open(r"run.slurm", "w") as f:
         f.write("""#!/bin/bash
 #SBATCH -n 16 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
-#SBATCH -t 12:00:00 # Runtime in minutes
+#SBATCH -t 0-04:00 # Runtime in minutes
 #SBATCH -p shared # Partition to submit to
 #SBATCH --mem-per-cpu 1024 # Memory per cpu in MB (see also ?mem-per-cpu)
 #SBATCH --open-mode=append
@@ -118,6 +118,7 @@ module list
 
 export OMP_PROC_BIND=spread
 export OMP_PLACES=threads
+export JULIA_NUM_THREADS=$SLURM_CPUS_ON_NODE
 
 echo "running...."
 
