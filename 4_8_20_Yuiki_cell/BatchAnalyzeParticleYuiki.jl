@@ -67,7 +67,7 @@ data = read_batch()
 cd(program_dir)
 
 # Plotting
-npts = 100000
+npts = 200000
 flows = sort(unique(data.flow))
 extractions = zero(flows)
 medians = zero(flows)
@@ -88,11 +88,11 @@ end
 display(plt)
 savefig("vz.pdf")
 
-plt = plot(flows, extractions, xlabel="flow (sccm)", ylabel="extraction", xscale=:log10)
+plt = plot(flows, extractions, xlabel="flow (sccm)", ylabel="extraction")
 display(plt)
 savefig("extraction.pdf")
 
-plt = plot(flows, medians, xlabel="flow (sccm)", ylabel="median vz (m/s)", xscale=:log10)
+plt = plot(flows, medians, xlabel="flow (sccm)", ylabel="median vz (m/s)")
 display(plt)
 savefig("medianvz.pdf")
 
