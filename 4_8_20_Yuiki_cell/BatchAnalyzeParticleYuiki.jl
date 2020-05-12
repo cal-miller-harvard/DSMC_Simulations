@@ -3,7 +3,6 @@ using CSV, StatsPlots, Printf, DataFrames, Plots, Statistics
 program_dir = "/home/cal/Documents/DSMC_Simulations/4_8_20_Yuiki_cell"
 data_dir = "/home/cal/Documents/DSMC_Simulations/4_8_20_Yuiki_cell"
 
-
 """
     read_batch()
 
@@ -43,13 +42,14 @@ function read_batch()
                         end
                     end
                     if valid
+                        println(fname)
                         table = CSV.read(fname,
                         header = ["idx", "x", "y", "z", "xnext", "ynext", "znext", "vx", "vy", "vz", "collides", "time"], 
                         types = [Int64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Int64, Float64],
                         skipto=linenum+2, ignorerepeated=true,delim=' ')
                         table[!, :flow] .= flow
                         table[!, :omega] .= omega
-                        append!(data, table)
+                        append!(data, dropmissing(table))
                     else
                         println("particle data not valid.")
                     end
