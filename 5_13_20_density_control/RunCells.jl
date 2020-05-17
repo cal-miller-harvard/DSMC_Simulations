@@ -4,7 +4,7 @@ include("DrawCell.jl")
 PROG_PATH = pwd()
 TEMPLATE_PATH = "./template"
 RUN_PATH = "./test"
-SPARTA_CMD = "mpirun ~/programs/sparta/spa -kokkos off"
+SPARTA_CMD = "mpirun /n/home03/calmiller/programs/sparta/spa -kokkos off"
 
 # DSMC Parameters
 flow = 4 # sccm
