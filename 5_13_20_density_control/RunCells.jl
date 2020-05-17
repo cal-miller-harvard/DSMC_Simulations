@@ -135,4 +135,5 @@ println("cat $RUN_PATH/in.cell")
 
 cd(RUN_PATH)
 run(pipeline(`$SPARTA_CMD`, stdin="in.cell"))
+run(`sbatch particles_0.slurm`)
 cd(PROG_PATH)
