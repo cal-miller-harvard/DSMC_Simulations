@@ -202,6 +202,7 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
         dist = freePath(vrel, props[6], props[7])
         freePropagate!(xnext, x, v, dist, ω)
         if getCollision(x, xnext) != 0
+            xnext .= min.(max.(xnext, -1000),1000)
             return (x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time)
         else
             time += dist / LinearAlgebra.norm(v)
