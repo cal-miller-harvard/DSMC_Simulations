@@ -32,7 +32,7 @@ function runsim(lwallarg)
 
     mkpath(RUN_PATH)
     for f in readdir(TEMPLATE_PATH)
-        cp(TEMPLATE_PATH*"/"*f, RUN_PATH*"/"*f, force=true)
+#        cp(TEMPLATE_PATH*"/"*f, RUN_PATH*"/"*f, force=true)
     end
     mkpath(RUN_PATH*"/data")
 
@@ -137,7 +137,7 @@ function runsim(lwallarg)
     println("cat $RUN_PATH/in.cell")
 
     cd(RUN_PATH)
-    run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
+#    run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
     run(`sbatch particles_0.slurm`)
     run(`sbatch particles_300.slurm`)
     cd(PROG_PATH)
