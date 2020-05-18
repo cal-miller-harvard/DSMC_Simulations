@@ -1,7 +1,8 @@
 using CSV, StatsPlots, Printf, DataFrames, Plots, Statistics
 
+
 program_dir = "/home/cal/Documents/DSMC_Simulations/ParticleTracing"
-data_dir = "/home/cal/Documents/DSMC_Simulations/4_24_20_long_second_stage"
+data_dir = "/home/cal/Documents/DSMC_Simulations/5_13_20_density_control"
 
 
 """
