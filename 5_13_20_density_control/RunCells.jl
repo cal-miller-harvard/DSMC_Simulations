@@ -3,7 +3,7 @@ include("DrawCell.jl")
 # Paths
 PROG_PATH = pwd()
 TEMPLATE_PATH = "./template"
-RUN_PATH = "./test"
+RUN_PATH = "./flow_2.000_gap_0.003_len_0.000"
 SPARTA_CMD = "mpirun /n/home03/calmiller/programs/sparta/spa -kokkos off"
 
 # DSMC Parameters
