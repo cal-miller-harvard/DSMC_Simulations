@@ -202,7 +202,6 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
         dist = freePath(vrel, props[6], props[7])
         freePropagate!(xnext, x, v, dist, ω)
         if getCollision(x, xnext) != 0
-            xnext .= min.(max.(xnext, -1000),1000)
             return (x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time)
         else
             time += dist / LinearAlgebra.norm(v)
@@ -329,6 +328,7 @@ function SimulateParticles(
             merge!(boundstats, stats)
         end
         if print_stuff && (saveall != 0 || colltype == 2)
+            outputs[i,5:7] .= min.(max.(outputs[i,5:7], -1000),1000)
             println(@sprintf("%d %e %e %e %e %e %e %e %e %e %d %e", i, 
             outputs[i,1], outputs[i,2], outputs[i,3], outputs[i,4], outputs[i,5], outputs[i,6], outputs[i,7], outputs[i,8], outputs[i,9], outputs[i,10], outputs[i,11]))
         end
