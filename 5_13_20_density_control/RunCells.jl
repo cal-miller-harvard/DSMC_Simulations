@@ -15,8 +15,8 @@ function runsim(lwallarg)
     nstages = 10
     wallthickness = 2mm
     wallperiod = 10mm
-    lwall = lwall*1000mm
-    gap = wallperiod - lwallarg
+    lwall = lwallarg*1000mm
+    gap = wallperiod - lwall
 
     stage_len = 10mm
     stage_id = 12.7mm
@@ -137,8 +137,9 @@ function runsim(lwallarg)
     println("cat $RUN_PATH/in.cell")
 
     cd(RUN_PATH)
-    run(pipeline(SPARTA_CMD, stdin="in.cell"))
+    run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
     run(`sbatch particles_0.slurm`)
+    run(`sbatch particles_300.slurm`)
     cd(PROG_PATH)
 end
 
