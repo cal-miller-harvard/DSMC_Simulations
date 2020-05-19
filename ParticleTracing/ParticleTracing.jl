@@ -328,7 +328,7 @@ function SimulateParticles(
             merge!(boundstats, stats)
         end
         if print_stuff && (saveall != 0 || colltype == 2)
-            outputs[i,5:7] .= min.(max.(outputs[i,5:7], -1000),1000)
+            outputs[i,4:6] .= min.(max.(outputs[i,4:6], -1000),1000)
             println(@sprintf("%d %e %e %e %e %e %e %e %e %e %d %e", i, 
             outputs[i,1], outputs[i,2], outputs[i,3], outputs[i,4], outputs[i,5], outputs[i,6], outputs[i,7], outputs[i,8], outputs[i,9], outputs[i,10], outputs[i,11]))
         end
