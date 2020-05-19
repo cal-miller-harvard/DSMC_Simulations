@@ -27,12 +27,12 @@ function runsim(lwallarg)
     # Paths
     PROG_PATH = pwd()
     TEMPLATE_PATH = "./template"
-    RUN_PATH = @sprintf("./flow_2.000_gap_%.3f_len_0.000", gap/(1000mm))
+    RUN_PATH = @sprintf("./flow_2.000_gap_%.5f_len_0.000", gap/(1000mm))
     SPARTA_CMD = `mpirun /n/home03/calmiller/programs/sparta/spa -kokkos off`    
 
     mkpath(RUN_PATH)
     for f in readdir(TEMPLATE_PATH)
-#        cp(TEMPLATE_PATH*"/"*f, RUN_PATH*"/"*f, force=true)
+       cp(TEMPLATE_PATH*"/"*f, RUN_PATH*"/"*f, force=true)
     end
     mkpath(RUN_PATH*"/data")
 
@@ -137,7 +137,7 @@ function runsim(lwallarg)
     println("cat $RUN_PATH/in.cell")
 
     cd(RUN_PATH)
-#    run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
+    run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
     run(`sbatch particles_0.slurm`)
     run(`sbatch particles_300.slurm`)
     cd(PROG_PATH)
