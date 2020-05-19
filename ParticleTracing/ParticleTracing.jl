@@ -296,13 +296,13 @@ function SimulateParticles(
     @inline function getCollision(x1::Vector, x2::Vector)
         r1 = sqrt(x1[1]^2 + x1[2]^2)
         r2 = sqrt(x2[1]^2 + x2[2]^2)
-        if x2[3] < bounds[1,1] || x2[3] > bounds[1,2] || r2 > bounds[2,2]
-            return 2
-        end
         for i in 1:size(geom)[1]
             if getIntersection(geom[i,2],geom[i,3],geom[i,4],geom[i,5],x1[3],r1,x2[3],r2)
                 return 1
             end
+        end
+        if x2[3] < bounds[1,1] || x2[3] > bounds[1,2] || r2 > bounds[2,2]
+            return 2
         end
         return 0
     end
