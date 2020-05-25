@@ -17,7 +17,7 @@ function runsim(lwallarg)
     wallperiod = 10mm
     lwall = lwallarg*1000mm
     # gap = wallperiod - lwall
-    gap = 3mm
+    gap = lwallarg*1000mm
 
     stage_len = 10mm
     stage_id = 12.7mm
@@ -161,9 +161,9 @@ function parse_commandline()
 
     @add_arg_table! s begin
         "-l"
-            help = "length of closed part of each stage (m)"
+            help = "gap between first and second stage (m)"
             arg_type = Float64
-            default = 0.006
+            default = 0.003
     end
 
     return parse_args(s)
