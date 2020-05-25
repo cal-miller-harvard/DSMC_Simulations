@@ -101,7 +101,7 @@ end
 
 Accepts as input the velocity of a particle v, the mean velocity of a buffer gas atom vgx, vgy, vgz, and the buffer gas temperature T. Computes the velocity of the particle after they undergo a collision, treating the particles as hard spheres and assuming a random scattering parameter and buffer gas atom velocity (assuming the particles are moving slower than the buffer gas atoms). Follows Appendices B and C of Boyd 2017. Note that v and vg are modified.
 """
-@inline function collide!(v::Vector, vgx::Number, vgy::Number, vgz::Number, T::Number)
+@inline function collide!(v::Vector, vgx, vgy, vgz, T)
     vg = sqrt(abs(-2 * kB * T / MASS_BUFFER_GAS * log(1-Random.rand())))
     θv = π * Random.rand()
     φv = 2 * π * Random.rand()
@@ -123,7 +123,7 @@ end
 
 Updates xnext by propagating a particle at x with velocity v a distance d in a harmonic potential with frequency ω
 """
-@inline function freePropagate!(xnext::Vector, x::Vector, v::Vector, d::Number, ω::Number)
+@inline function freePropagate!(xnext::Vector, x::Vector, v::Vector, d, ω)
     if ω != 0
         t = min(d/LinearAlgebra.norm(v), 1.0)
         sint = sin(sqrt(2)*ω*t)
@@ -143,17 +143,17 @@ end
 
 Accepts as input the velocity of a particle relative to a buffer gas atom v, the buffer gas temperature T and the buffer gas density ρ. Draws a distance the particle travels before it hits a buffer gas atom from an exponential distribution, accounting for a velocity-dependent mean free path. Note that this assumes that the gas properties don't change significantly over a mean free path.
 """
-@inline function freePath(vrel::Number, T::Number, ρ::Number)
-    return min(-log(Random.rand()) * sqrt(vrel^2/(3*kB*T/MASS_BUFFER_GAS + vrel^2))/(ρ*σ_BUFFER_GAS_PARTICLE),1000)
+@inline function freePath(v, vrel, T, ρ)
+    λ = sqrt(v[1]^2 + v[2]^2 + v[3]^2)/(ρ*σ_BUFFER_GAS_PARTICLE*sqrt(3*kB*T/MASS_BUFFER_GAS + vrel^2))
+    return min(-log(Random.rand()) * λ, 1000.0)
 end
-
 
 """
     getIntersection(x1, x2, y2, x3, y3, x4, y4)
 
 Returns whether the line segments ((x1, y1), (x2, y2)) and ((x3, y3), (x4, y4)) intersect. See "Faster Line Segment Intersection" from Graphics Gems III ed. David Kirk.
 """
-@inline function getIntersection(x1::Number, y1::Number, x2::Number, y2::Number, x3::Number, y3::Number, x4::Number, y4::Number)
+@inline function getIntersection(x1, y1, x2, y2, x3, y3, x4, y4)
     denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
     num = x4*(y1 - y3) + x1*(y3-y4) + x3*(y4-y1)
     if denom > 0
@@ -199,7 +199,7 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
     while true
         interp!(props, x)
         vrel = sqrt((v[1] - props[3])^2 + (v[2] - props[4])^2 + (v[3] - props[5])^2)
-        dist = freePath(vrel, props[6], props[7])
+        dist = freePath(v, vrel, props[6], props[7])
         freePropagate!(xnext, x, v, dist, ω)
         if getCollision(x, xnext) != 0
             return (x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time)
