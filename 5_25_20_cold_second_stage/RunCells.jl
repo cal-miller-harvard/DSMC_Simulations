@@ -2,7 +2,7 @@ using ArgParse
 
 include("DrawCell.jl")
 
-function runsim(lwallarg)
+function runsim(lwallarg, lstage)
     # DSMC Parameters
     flow = 4 # sccm
     zmax = 0.35 # m
@@ -19,7 +19,7 @@ function runsim(lwallarg)
     # gap = wallperiod - lwall
     gap = lwallarg*1000mm
 
-    stage_len = 10mm
+    stage_len = lstage*1000mm
     stage_id = 12.7mm
     stage_od = 22.23mm
     raperture = 4.5mm
@@ -28,7 +28,7 @@ function runsim(lwallarg)
     # Paths
     PROG_PATH = pwd()
     TEMPLATE_PATH = "./template"
-    RUN_PATH = @sprintf("./flow_2.000_gap_%.5f_len_0.000", gap/(1000mm))
+    RUN_PATH = @sprintf("./flow_2.000_gap_%.5f_len_%.5f", gap/(1000mm), lstage)
     SPARTA_CMD = `mpirun /n/home03/calmiller/programs/sparta/spa -kokkos off`    
 
     mkpath(RUN_PATH)
@@ -164,10 +164,14 @@ function parse_commandline()
             help = "gap between first and second stage (m)"
             arg_type = Float64
             default = 0.003
+        "-L"
+            help = "length of second stage (m)"
+            arg_type = Float64
+            default = 0.010
     end
 
     return parse_args(s)
 end
 
 args = parse_commandline()
-runsim(args["l"])
+runsim(args["l"], args["L"])
