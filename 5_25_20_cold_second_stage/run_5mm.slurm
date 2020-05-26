@@ -17,4 +17,4 @@
 
 echo "running...."
 
-julia RunCells.jl -l 0.005
+julia RunCells.jl -l 0.005 -L 0.02
