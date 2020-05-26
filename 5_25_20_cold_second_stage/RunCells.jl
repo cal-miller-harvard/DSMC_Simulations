@@ -87,9 +87,9 @@ function runsim(lwallarg)
         units               si
         timestep 	        \${TIMESTEP}
         
-        species		        he4.species He4
-        mixture		        He4 He4 nrho 1 vstream 26.2 0 0 temp 2.0
-        collide             vss He4 He4.vss #kk
+        species		        he3.species He3
+        mixture		        He3 He3 nrho 1 vstream 26.2 0 0 temp 2.0
+        collide             vss He3 He3.vss #kk
         
         # read_restart data/cell.restart.*
         
@@ -100,7 +100,7 @@ function runsim(lwallarg)
         
         read_surf           data.cell
         group       inlet surf id 12
-        fix		    in emit/surf He4 inlet n \${NPERSTEP} perspecies no
+        fix		    in emit/surf He3 inlet n \${NPERSTEP} perspecies no
 
         read_surf           data.diffuser
         
@@ -123,8 +123,8 @@ function runsim(lwallarg)
         next a
         jump in.cell loop
         
-        compute temp thermal/grid all He4 temp
-        compute rhov grid all He4 nrho massrho u v w
+        compute temp thermal/grid all He3 temp
+        compute rhov grid all He3 nrho massrho u v w
         fix out ave/grid all 1000 100 100000 c_temp[*] c_rhov[*]
         dump out grid all 100000 data/DS2FF.*.DAT xc yc f_out[*]
         

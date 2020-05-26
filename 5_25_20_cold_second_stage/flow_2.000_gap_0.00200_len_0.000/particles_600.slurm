@@ -5,8 +5,8 @@
 #SBATCH -p shared # Partition to submit to
 #SBATCH --mem-per-cpu 2048 # Memory per cpu in MB (see also ?mem-per-cpu)
 #SBATCH --open-mode=append
-#SBATCH -o particles_omega_300_job_%j.out # Standard out goes to this file
-#SBATCH -e particles_omega_300_job_%j.err # Standard err goes to this filehostname
+#SBATCH -o particles_omega_600_job_%j.out # Standard out goes to this file
+#SBATCH -e particles_omega_600_job_%j.err # Standard err goes to this filehostname
 
 # module load intel/19.0.5-fasrc01 openmpi/4.0.2-fasrc01 fftw/3.3.8-fasrc01 cmake/3.12.1-fasrc01 Anaconda3/2019.10 python/3.7.7-fasrc01
 # module list
