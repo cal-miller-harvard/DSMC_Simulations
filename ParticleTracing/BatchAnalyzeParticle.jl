@@ -1,7 +1,7 @@
 using CSV, StatsPlots, Printf, DataFrames, Plots
 
 program_dir = "/home/cal/Documents/DSMC_Simulations/ParticleTracing"
-data_dir = "/home/cal/Documents/DSMC_Simulations/4_24_20_long_second_stage"
+data_dir = "/home/cal/Documents/DSMC_Simulations/5_25_20_cold_second_stage"
 
 
 """
@@ -32,15 +32,18 @@ function read_batch()
                 part_file = nothing
                 geom_exists = false
                 max_x = 10.0E-3
+                max_y = 10.0E-3
                 for f in files
                     mc = match(cell_pattern, f)
                     if !(mc === nothing)
                         fname = dir*"/data/"*f
                         box = Matrix(CSV.read(fname, header = ["min","max"], skipto=6, limit=2,ignorerepeated=true,delim=' ',silencewarnings=true))
                         max_x = box[1,2]
+                        max_y = box[2,2]
                         geom_exists = true
                     end
                 end
+                files = readdir(dir)
                 for f in files
                     md = match(part_pattern, f)
                     if !(md === nothing) && geom_exists
@@ -48,7 +51,8 @@ function read_batch()
                         omega = parse(Float64, md.captures[1])
                         valid = false
                         linenum = 0
-                        fname = dir*"/data/"*part_file
+                        fname = dir*"/"*part_file
+                        # fname = dir*"/data/"*part_file
                         for line in eachline(fname)
                             if occursin("idx x y z", line)
                                 valid = true
@@ -60,15 +64,18 @@ function read_batch()
                             end
                         end
                         if valid
-                            table = CSV.read(fname,
+                            println(fname)
+                            table = DataFrame(CSV.read(fname,
                             header = ["idx", "x", "y", "z", "xnext", "ynext", "znext", "vx", "vy", "vz", "collides", "time"], 
                             types = [Int64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Float64, Int64, Float64],
-                            skipto=linenum+2, ignorerepeated=true,delim=' ')
+                            skipto=linenum+2, ignorerepeated=true,delim=' '))
+                            dropmissing!(table, disallowmissing=true)
                             table[!, :flow] .= flow
                             table[!, :gap] .= gap
                             table[!, :len] .= len
                             table[!, :omega] .= omega
                             table[!, :maxx] .= max_x
+                            table[!, :maxy] .= max_y
                             append!(data, table)
                         else
                             println("particle data not valid.")
@@ -92,11 +99,11 @@ cd(program_dir)
 
 # Analysis
 lens = unique(data.len)
-lens = [i for i in lens if i < 0.1] 
+lens = [i for i in lens] 
 flows = unique(data.flow)
-gaps = unique(data.gap)
+gaps = [i for i in unique(data.gap) if i < 0.0019]
 omegas = unique(data.omega)
-omegas = [i for i in omegas if i < 650] 
+omegas = [i for i in omegas] 
 extracted = zeros(length(lens), length(flows), length(gaps), length(omegas))
 slow = zeros(length(lens), length(flows), length(gaps), length(omegas))
 
@@ -126,44 +133,135 @@ cd(plotdir)
 
 colors = cgrad(:inferno, scale = :log)
 
-extractionplots = Array{Plots.Plot}(UndefInitializer(), (length(flows),length(gaps)))
-for (i, flow) in enumerate(flows)
-    for (j, gap) in enumerate(gaps)
-        extractionplots[i,j] = heatmap(omegas, lens*1000, extracted[:,i,j,:], xlabel="omega (1/s)", ylabel="Second stage length (mm)", title=@sprintf("Extraction for flow of %.3f sccm and gap of %.3f mm", flow, 1000*gap),clims=(minimum(extracted),maximum(extracted)),c = colors)
-        savefig(@sprintf("extraction_flow_%.3f_gap_%.3f.pdf", flow, gap))
+# extractionplots = Array{Plots.Plot}(UndefInitializer(), (length(flows),length(gaps)))
+# for (i, flow) in enumerate(flows)
+#     for (j, gap) in enumerate(gaps)
+#         extractionplots[i,j] = heatmap(omegas, lens*1000, extracted[:,i,j,:], xlabel="omega (1/s)", ylabel="Second stage length (mm)", title=@sprintf("Extraction for flow of %.3f sccm and gap of %.3f mm", flow, 1000*gap),clims=(minimum(extracted),maximum(extracted)),c = colors)
+#         savefig(@sprintf("extraction_flow_%.3f_gap_%.3f.pdf", flow, gap))
+#     end
+# end
+
+# slowplots = Array{Plots.Plot}(UndefInitializer(), (length(flows),length(gaps)))
+# for (i, flow) in enumerate(flows)
+#     for (j, gap) in enumerate(gaps)
+#         slowplots[i,j] = heatmap(omegas, lens*1000, slow[:,i,j,:], xlabel="omega (1/s)", ylabel="Second stage length (mm)", title=@sprintf("Fraction < 15 m/s for flow of %.3f sccm and gap of %.3f mm", flow, 1000*gap),clims=(minimum(slow),maximum(slow)),c = colors)
+#         savefig(@sprintf("slowed_flow_%.3f_gap_%.3f.pdf", flow, gap))
+#     end
+# end
+
+extr_0 = data[(data.znext .> data.maxx) .& (data.omega .== 0) .& (data.ynext .< data.maxy), :]
+extr_300 = data[(data.znext .> data.maxx) .& (data.omega .== 300) .& (data.ynext .< data.maxy), :]
+extr_600 = data[(data.znext .> data.maxx) .& (data.omega .== 600) .& (data.ynext .< data.maxy), :]
+
+slow_0 = extr_0[(sqrt.(extr_0.vz.^2 .+ extr_0.vy.^2 .+extr_0.vx.^2) .< 10), :]
+slow_300 = extr_300[(sqrt.(extr_300.vz.^2 .+ extr_300.vy.^2 .+extr_300.vx.^2) .< 10), :]
+slow_600 = extr_600[(sqrt.(extr_600.vz.^2 .+ extr_600.vy.^2 .+extr_600.vx.^2) .< 10), :]
+
+N = 100000
+bins = [i for i in 0:3:60]
+
+hist0 = plot()
+extr = extr_0
+for len in lens
+    for gap in gaps
+        d = extr[(extr.len .== len) .& (extr.gap .== gap) .& (abs.(extr.xnext) .< 999) .& (abs.(extr.ynext) .< 999) .& (abs.(extr.znext) .< 999) , :]
+        if length(d.vz) > 0
+            frac = length(d.vz)/N
+            stephist!(hist0, d.vz, label="gap: $gap len: $len extr: $frac", normed=false,bins=bins)
+        end
     end
 end
+savefig("hist_omega_0.pdf")
 
-slowplots = Array{Plots.Plot}(UndefInitializer(), (length(flows),length(gaps)))
-for (i, flow) in enumerate(flows)
-    for (j, gap) in enumerate(gaps)
-        slowplots[i,j] = heatmap(omegas, lens*1000, slow[:,i,j,:], xlabel="omega (1/s)", ylabel="Second stage length (mm)", title=@sprintf("Fraction < 15 m/s for flow of %.3f sccm and gap of %.3f mm", flow, 1000*gap),clims=(minimum(slow),maximum(slow)),c = colors)
-        savefig(@sprintf("slowed_flow_%.3f_gap_%.3f.pdf", flow, gap))
+hist300 = plot()
+extr = extr_300
+for len in lens
+    for gap in gaps
+        d = extr[(extr.len .== len) .& (extr.gap .== gap) .& (abs.(extr.xnext) .< 999) .& (abs.(extr.ynext) .< 999) .& (abs.(extr.znext) .< 999) , :]
+        if length(d.vz) > 0
+            frac = length(d.vz)/N
+            stephist!(hist300, d.vz, label="gap: $gap len: $len extr: $frac", normed=false,bins=bins)
+        end
     end
 end
+savefig("hist_omega_300.pdf")
 
-extr_0 = data[(data.znext .> data.maxx) .& (data.omega .== 0), :]
-extr_300 = data[(data.znext .> data.maxx) .& (data.omega .== 300), :]
-gaps = unique(data.gap)
-vzbins = [0:maximum(data.vz)/20:maximum(data.vz)+0.001;]
-lenbins = [0:maximum(data.len)/length(unique(data.len)):maximum(data.len)+0.001;]
-colors = cgrad(:inferno)
-sx = 600
-sy = 600
-
-histograms = Array{Plots.Plot}(UndefInitializer(), length(gaps))
-for (i, gap) in enumerate(gaps)
-    d0 = extr_0[extr_0.gap .== gap, :]
-    d300 = extr_300[extr_300.gap .== gap, :]
-    histograms[i] = plot(
-        histogram2d(d0.vz, d0.len, clims=(0, 250), colorbar=:bottom, bins = (vzbins, lenbins), c=colors,size=(sx,sy),
-        title=@sprintf("omega: 0, gap: %.0f mm", 1000*gap)),
-        histogram2d(d300.vz, d300.len, clims=(0, 250), colorbar=:bottom, bins = (vzbins, lenbins), c=colors,size=(sx,sy),
-        title=@sprintf("omega: 300, gap: %.0f mm", 1000*gap)),
-        layout=@layout grid(2,1)
-    )
-    savefig(@sprintf("hist_gap_%.3f.pdf", gap))
+hist600 = plot()
+extr = extr_600
+for len in lens
+    for gap in gaps
+        d = extr[(extr.len .== len) .& (extr.gap .== gap) .& (abs.(extr.xnext) .< 999) .& (abs.(extr.ynext) .< 999) .& (abs.(extr.znext) .< 999) , :]
+        if length(d.vz) > 0
+            frac = length(d.vz)/N
+            stephist!(hist600, d.vz, label="gap: $gap len: $len extr: $frac", normed=false,bins=bins)
+        end
+    end
 end
+savefig("hist_omega_600.pdf")
+
+N = 100000.0
+bins = [i for i in 0:0.5:10]
+
+
+hist0 = plot()
+extr = slow_0
+for len in lens
+    for gap in gaps
+        d = extr[(extr.len .== len) .& (extr.gap .== gap) .& (abs.(extr.xnext) .< 999) .& (abs.(extr.ynext) .< 999) .& (abs.(extr.znext) .< 999) , :]
+        if length(d.vz) > 0
+            frac = length(d.vz)/N
+            stephist!(hist0, d.vz, label="gap: $gap len: $len extr: $frac", normed=false,bins=bins)
+        end
+    end
+end
+savefig("slow_omega_0.pdf")
+
+hist300 = plot()
+extr = slow_300
+for len in lens
+    for gap in gaps
+        d = extr[(extr.len .== len) .& (extr.gap .== gap) .& (abs.(extr.xnext) .< 999) .& (abs.(extr.ynext) .< 999) .& (abs.(extr.znext) .< 999) , :]
+        if length(d.vz) > 0
+            frac = length(d.vz)/N
+            stephist!(hist300, d.vz, label="gap: $gap len: $len extr: $frac", normed=false,bins=bins)
+        end
+    end
+end
+savefig("slow_omega_300.pdf")
+
+hist600 = plot()
+extr = slow_600
+for len in lens
+    for gap in gaps
+        d = extr[(extr.len .== len) .& (extr.gap .== gap) .& (abs.(extr.xnext) .< 999) .& (abs.(extr.ynext) .< 999) .& (abs.(extr.znext) .< 999) , :]
+        if length(d.vz) > 0
+            frac = length(d.vz)/N
+            stephist!(hist600, d.vz, label="gap: $gap len: $len extr: $frac", normed=false,bins=bins)
+        end
+    end
+end
+savefig("slow_omega_600.pdf")
+
+# gaps = unique(data.gap)
+# vzbins = [0:maximum(data.vz)/20:maximum(data.vz)+0.001;]
+# lenbins = [0:maximum(data.len)/length(unique(data.len))+0.0001:maximum(data.len)+0.001;]
+# colors = cgrad(:inferno)
+# sx = 600
+# sy = 600
+
+# histograms = Array{Plots.Plot}(UndefInitializer(), length(gaps))
+# for (i, gap) in enumerate(gaps)
+#     d0 = extr_0[extr_0.gap .== gap, :]
+#     d300 = extr_300[extr_300.gap .== gap, :]
+#     histograms[i] = plot(
+#         histogram2d(d0.vz, d0.len, clims=(0, 250), colorbar=:bottom, bins = (vzbins, lenbins), c=colors,size=(sx,sy),
+#         title=@sprintf("omega: 0, gap: %.0f mm", 1000*gap)),
+#         histogram2d(d300.vz, d300.len, clims=(0, 250), colorbar=:bottom, bins = (vzbins, lenbins), c=colors,size=(sx,sy),
+#         title=@sprintf("omega: 300, gap: %.0f mm", 1000*gap)),
+#         layout=@layout grid(2,1)
+#     )
+#     savefig(@sprintf("hist_gap_%.3f.pdf", gap))
+# end
 # plot(histograms..., layout=@layout grid(1, length(histograms)))
 # savefig("vz_len_histogram.pdf")
 

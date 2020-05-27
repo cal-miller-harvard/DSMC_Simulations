@@ -116,7 +116,7 @@ function runsim(lwallarg, lstage)
         
         # Run until convergence
         label loop
-        variable a loop 40
+        variable a loop 100
         run 		    10000
         adapt_grid all refine particle 16 4
         balance_grid rcb part

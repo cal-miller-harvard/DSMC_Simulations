@@ -2,7 +2,7 @@ using CSV, StatsPlots, Printf, DataFrames, Plots, Statistics
 
 
 program_dir = "/home/cal/Documents/DSMC_Simulations/ParticleTracing"
-data_dir = "/home/cal/Documents/DSMC_Simulations/5_13_20_density_control"
+data_dir = "/home/cal/Documents/DSMC_Simulations/5_25_20_cold_second_stage"
 
 
 """
@@ -125,14 +125,14 @@ for (i, gap) in enumerate(gaps)
         zs =sort(unique(d0.z))
         vz0 = [mean(d0.vz[d0.z .== z]) for z in zs]
         vz300 = [mean(d300.vz[d300.z .== z]) for z in zs]
-        plot!(vzplt0, zs, vz0, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 0, gap: %.0f mm", 1000*gap),color=colors[j])
-        plot!(vzplt300, zs, vz300, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 300, gap: %.0f mm", 1000*gap),color=colors[j])
+        plot!(vzplt0, zs, vz0, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 0, gap: %.2f mm", 1000*gap),color=colors[j])
+        plot!(vzplt300, zs, vz300, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 300, gap: %.2f mm", 1000*gap),color=colors[j])
         vline!(vzplt0, [lcell+gap+len+lend],label="",color=colors[j])
         vline!(vzplt300, [lcell+gap+len+lend],label="",color=colors[j])
     end
     plot(vzplt0,vzplt300,
     layout=@layout grid(2,1))
-    savefig(@sprintf("vz_stat_gap_%.3f.pdf", gap))
+    savefig(@sprintf("vz_stat_gap_%.5f.pdf", gap))
 
 end
 
@@ -153,14 +153,14 @@ for (i, gap) in enumerate(gaps)
         zs =sort(unique(d0.z))
         n0 = [log10(mean(d0.n[d0.z .== z])) for z in zs]
         n300 = [log10(mean(d300.n[d300.z .== z])) for z in zs]
-        plot!(nplot0, zs, n0, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 0, gap: %.0f mm", 1000*gap),color=colors[j])
-        plot!(nplot300, zs, n300, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 300, gap: %.0f mm", 1000*gap),color=colors[j])
+        plot!(nplot0, zs, n0, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 0, gap: %.2f mm", 1000*gap),color=colors[j])
+        plot!(nplot300, zs, n300, label=len,size=(sx,sy),legend=:topleft,title=@sprintf("omega: 300, gap: %.2f mm", 1000*gap),color=colors[j])
         vline!(nplot0, [lcell+gap+len+lend],label="",color=colors[j])
         vline!(nplot300, [lcell+gap+len+lend],label="",color=colors[j])
     end
     plot(nplot0,nplot300,
     layout=@layout grid(2,1))
-    savefig(@sprintf("n_stat_gap_%.3f.pdf", gap))
+    savefig(@sprintf("n_stat_gap_%.5f.pdf", gap))
 end
 
 cd(program_dir)
