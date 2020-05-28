@@ -126,13 +126,13 @@ Updates xnext by propagating a particle at x with velocity v a distance d in a h
 @inline function freePropagate!(xnext::Vector, x::Vector, v::Vector, d, ω)
     if ω != 0
         t = min(d/LinearAlgebra.norm(v), 1.0)
-        sint = sin(sqrt(2)*ω*t)
-        cost = cos(sqrt(2)*ω*t)
+        sint = ω > 0.0 ? sin(sqrt(2)*ω*t) : sinh(sqrt(2)*ω*t)
+        cost = ω > 0.0 ? cos(sqrt(2)*ω*t) : cosh(sqrt(2)*ω*t)
         xnext[1] = x[1]*cost + v[1]*sint/(sqrt(2)*ω)
         xnext[2] = x[2]*cost + v[2]*sint/(sqrt(2)*ω)
         xnext[3] = x[3] + v[3]*t
-        v[1] = v[1]*cost-2*x[1]*ω*sint
-        v[2] = v[2]*cost-2*x[2]*ω*sint
+        v[1] = v[1]*cost-2*x[1]*abs(ω)*sint
+        v[2] = v[2]*cost-2*x[2]*abs(ω)*sint
     else
         xnext .= x .+ d .* LinearAlgebra.normalize(v)
     end
@@ -200,6 +200,7 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
         interp!(props, x)
         vrel = sqrt((v[1] - props[3])^2 + (v[2] - props[4])^2 + (v[3] - props[5])^2)
         dist = freePath(v, vrel, props[6], props[7])
+        # TODO: Modify to change trap frequency based on position or collisions
         freePropagate!(xnext, x, v, dist, ω)
         if getCollision(x, xnext) != 0
             return (x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time)
