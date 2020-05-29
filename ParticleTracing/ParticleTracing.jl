@@ -101,7 +101,7 @@ end
 
 Accepts as input the velocity of a particle v, the mean velocity of a buffer gas atom vgx, vgy, vgz, and the buffer gas temperature T. Computes the velocity of the particle after they undergo a collision, treating the particles as hard spheres and assuming a random scattering parameter and buffer gas atom velocity (assuming the particles are moving slower than the buffer gas atoms). Follows Appendices B and C of Boyd 2017. Note that v and vg are modified.
 """
-@inline function collide!(v::Vector, vgx, vgy, vgz, T)
+@inline function collide!(v, vgx, vgy, vgz, T)
     vg = sqrt(abs(-2 * kB * T / MASS_BUFFER_GAS * log(1-Random.rand())))
     θv = π * Random.rand()
     φv = 2 * π * Random.rand()
@@ -123,18 +123,58 @@ end
 
 Updates xnext by propagating a particle at x with velocity v a distance d in a harmonic potential with frequency ω
 """
-@inline function freePropagate!(xnext::Vector, x::Vector, v::Vector, d, ω)
+@inline function freePropagate!(xnext, x, v, t, ω)
+    xnext[3] = x[3] + v[3]*t
     if ω != 0
-        t = min(d/LinearAlgebra.norm(v), 1.0)
         sint = ω > 0.0 ? sin(sqrt(2)*ω*t) : sinh(sqrt(2)*ω*t)
         cost = ω > 0.0 ? cos(sqrt(2)*ω*t) : cosh(sqrt(2)*ω*t)
         xnext[1] = x[1]*cost + v[1]*sint/(sqrt(2)*ω)
         xnext[2] = x[2]*cost + v[2]*sint/(sqrt(2)*ω)
-        xnext[3] = x[3] + v[3]*t
         v[1] = v[1]*cost-2*x[1]*abs(ω)*sint
         v[2] = v[2]*cost-2*x[2]*abs(ω)*sint
     else
-        xnext .= x .+ d .* LinearAlgebra.normalize(v)
+        xnext[1] = x[1] + v[1]*t
+        xnext[2] = x[2] + v[2]*t
+    end
+end
+
+# TODO: Document this
+@inline function freePropagate!(xnext, x, v, d, ω, zmin, zmax)
+    vmag = sqrt(v[1]^2+v[2]^2+v[3]^2)
+    if vmag < 1E-6
+        return
+    end
+    t = d/vmag
+    x3next = x[3]+v[3]*t
+    if x[3] > zmax && x3next < zmax
+        t1 = (x[3] - zmax)/v[3]
+        freePropagate!(xnext, x, v, t1, 0)
+        xnext[3] = zmax
+        d -= sqrt((x[1]-xnext[1])^2+(x[2]-xnext[2])^2+(x[3]-xnext[3])^2)
+        return freePropagate!(xnext, deepcopy(xnext), v, d, ω, zmin, zmax)
+    elseif x[3] < zmax && x3next > zmax
+        t1 = (zmax - x[3])/v[3]
+        freePropagate!(xnext, x, v, t1, ω)
+        xnext[3] = zmax
+        d -= sqrt((x[1]-xnext[1])^2+(x[2]-xnext[2])^2+(x[3]-xnext[3])^2)
+        return freePropagate!(xnext, deepcopy(xnext), v, d, 0, zmin, zmax)
+    elseif x[3] > zmin && x3next < zmin
+        t1 = (x[3] - zmin)/v[3]
+        freePropagate!(xnext, x, v, t1, 0)
+        xnext[3] = zmin
+        d -= sqrt((x[1]-xnext[1])^2+(x[2]-xnext[2])^2+(x[3]-xnext[3])^2)
+        return freePropagate!(xnext, deepcopy(xnext), v, d, ω, zmin, zmax)
+    elseif x[3] < zmin && x3next > zmin
+        t1 = (zmin - x[3])/v[3]
+        freePropagate!(xnext, x, v, t1, ω)
+        xnext[3] = zmin
+        d -= sqrt((x[1]-xnext[1])^2+(x[2]-xnext[2])^2+(x[3]-xnext[3])^2)
+        return freePropagate!(xnext, deepcopy(xnext), v, d, 0, zmin, zmax)
+    end
+    if zmin < x[3] < zmax
+        return freePropagate!(xnext, x, v, d, ω)
+    else
+        return freePropagate!(xnext, x, v, d, 0)
     end
 end
 
@@ -182,7 +222,7 @@ end
 
 Accepts as input the position of a particle xinit, its velocity v, the function interp!, which takes as input a position and a vector and updates the vector to describe the gas [x, y, vgx, vgy, vgz, T, ρ], and the function getCollision(x1, x2), which returns whether if the segment from x1 to x2 intersects geometry. Computes the path of the particle until it getCollision returns true. Returns a vector of simulation results with elements x, y, z, xnext, ynext, znext, vx, vy, vz, collides, time.
 """
-@inline function propagate(xinit::Vector, vin::Vector, interp!::Function, getCollision::Function, ω=0.0, stats=nothing)
+@inline function propagate(xinit, vin, interp!, getCollision, ω=0.0, zmin=-Inf, zmax=Inf, pflip=0.0, stats=nothing)
     x = deepcopy(xinit)
     props = zeros(8) # x, y, vgx, vgy, vgz, T, ρ, dmin
     interp!(props, x)
@@ -196,12 +236,16 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
         collides += 1
     end
 
+    if rand() < 0.5
+        ω = -ω
+    end
+
     while true
         interp!(props, x)
         vrel = sqrt((v[1] - props[3])^2 + (v[2] - props[4])^2 + (v[3] - props[5])^2)
         dist = freePath(v, vrel, props[6], props[7])
-        # TODO: Modify to change trap frequency based on position or collisions
-        freePropagate!(xnext, x, v, dist, ω)
+        # TODO: Modify to change trap frequency based on collisions
+        freePropagate!(xnext, x, v, dist, ω, zmin, zmax)
         if getCollision(x, xnext) != 0
             return (x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time)
         else
@@ -210,6 +254,9 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
         end
         x .= xnext
         collide!(v, props[3], props[4], props[5], props[6])
+        if rand() < pflip
+            ω = -ω
+        end
         if !isnothing(stats)
             updateStats!(stats, x, v, time)
         end
@@ -223,12 +270,15 @@ interps = 0
     Runs nParticles simulations using the SPARTA outputs with paths geomFile and gridFile to define the surfaces and buffer gas properties. Generates each particle with position and velocity returned by generateParticle. Returns a nParticles by 11 matrix of simulation results, with columns x, y, z, xnext, ynext, znext, vx, vy, vz, collides, time.
 """
 function SimulateParticles(
-    geomFile::AbstractString, 
-    gridFile::AbstractString, 
-    nParticles::Integer,
-    generateParticle::Function,
+    geomFile, 
+    gridFile, 
+    nParticles,
+    generateParticle,
     print_stuff=true,
     ω=0.0,
+    zmin=-Inf,
+    zmax=Inf,
+    pflip=0.0,
     saveall=0,
     savestats=nothing,
     saveexitstats=nothing,
@@ -271,7 +321,7 @@ function SimulateParticles(
     
     Updates the gas properties props with the data from point x.
     """
-    @inline function interpolate!(props::Vector, x::Vector)
+    @inline function interpolate!(props, x)
         # x, y, vgx, vgy, vgz, T, ρ, dmin
         if sqrt((x[3] - props[1])^2 + (sqrt(x[1]^2 + x[2]^2) - props[2])^2) > props[8]
             global interps
@@ -294,7 +344,7 @@ function SimulateParticles(
 
     Checks whether the line between x1 and x2 intersects geometry or the boundary of the simulation region.
     """
-    @inline function getCollision(x1::Vector, x2::Vector)
+    @inline function getCollision(x1, x2)
         r1 = sqrt(x1[1]^2 + x1[2]^2)
         r2 = sqrt(x2[1]^2 + x2[2]^2)
         for i in 1:size(geom)[1]
@@ -320,7 +370,7 @@ function SimulateParticles(
     Threads.@threads for i in 1:nParticles
         stats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
         xpart, vpart = generateParticle()
-        outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision, ω, stats)
+        outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision, ω, zmin, zmax, pflip, stats)
         colltype = getCollision(outputs[i,[1,2,3]], outputs[i,[4,5,6]])
         if !isnothing(savestats)
             merge!(allstats, stats)
@@ -392,6 +442,18 @@ function parse_commandline()
             help = "sqrt(v/m) for a harmonic trap of V(x,y,z) = v*(x^2+y^2)"
             arg_type = Float64
             default = 0.0
+        "--zmin"
+            help = "minimum position of harmonic trap"
+            arg_type = Float64
+            default = -Inf
+        "--zmax"
+            help = "maximum position of harmonic trap"
+            arg_type = Float64
+            default = Inf
+        "--pflip"
+            help = "probability that collision flips spin"
+            arg_type = Float64
+            default = 0.0
         "--saveall"
             help = "save all particles or just those that leave the cell"
             arg_type = Int
@@ -437,6 +499,9 @@ function main()
         generateParticle,
         true,
         args["omega"],
+        args["zmin"],
+        args["zmax"],
+        args["pflip"],
         args["saveall"],
         !isnothing(args["stats"]),
         !isnothing(args["exitstats"]))
