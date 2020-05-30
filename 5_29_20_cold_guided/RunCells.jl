@@ -93,9 +93,9 @@ function runsim(lgap, lstage, T1, T2)
         units               si
         timestep 	        \${TIMESTEP}
         
-        species		        $(he).species He
+        species		        %s.species He
         mixture		        He He nrho 1 vstream 26.2 0 0 temp 2.0
-        collide             vss He $(he).vss #kk
+        collide             vss He %s.vss #kk
         
         # read_restart data/cell.restart.*
         
@@ -143,7 +143,7 @@ function runsim(lgap, lstage, T1, T2)
         
         # Save statistics and surfaces
         dump out grid all 1 data/DS2FF.DAT xc yc f_out[*]
-        dump surfs surf all 1 data/cell.surfs id v1x v1y v2x v2y""", fnum, zmax, rmax, timestep, nperstep, T1, T2))
+        dump surfs surf all 1 data/cell.surfs id v1x v1y v2x v2y""", fnum, zmax, rmax, timestep, nperstep, T1, T2, he, he))
     end
 
     println("cat $RUN_PATH/in.cell")
