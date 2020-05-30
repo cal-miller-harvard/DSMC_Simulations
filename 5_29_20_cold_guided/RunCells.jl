@@ -168,8 +168,8 @@ function runsim(lgap, lstage, T1, T2)
                 #SBATCH -p shared # Partition to submit to
                 #SBATCH --mem-per-cpu 1024 # Memory per cpu in MB
                 #SBATCH --open-mode=append
-                #SBATCH -o data/particles_omega_%.5f_M_%.1f_job_\%j.out # Standard out goes to this file
-                #SBATCH -e data/particles_omega_%.5f_M_%.1f_job_\%j.err # Standard err goes to this filehostname
+                #SBATCH -o data/particles_omega_%.5f_M_%.1f_job_%%j.out # Standard out goes to this file
+                #SBATCH -e data/particles_omega_%.5f_M_%.1f_job_%%j.err # Standard err goes to this filehostname
 
                 module load intel/19.0.5-fasrc01 openmpi/4.0.2-fasrc01 fftw/3.3.8-fasrc01 cmake/3.12.1-fasrc01 Anaconda3/2019.10 python/3.7.7-fasrc01
                 module list
