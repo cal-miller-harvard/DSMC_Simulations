@@ -159,7 +159,7 @@ function runsim(lgap, lstage, T1, T2)
 
     for (i, omega) in enumerate(omegas)
         for (j, M) in enumerate(Ms)
-            fname = RUN_PATH*@sprintf("/run_omega_%.5f_M_%.1f.cell",omega)
+            fname = RUN_PATH*@sprintf("/run_omega_%.5f_M_%.1f.cell",omega, M)
             open(fname, "w") do f
                 write(f,@sprintf("""#!/bin/bash
                 #SBATCH -n 8 # Number of cores requested
