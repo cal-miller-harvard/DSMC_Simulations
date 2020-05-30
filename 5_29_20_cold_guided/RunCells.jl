@@ -2,7 +2,7 @@ using ArgParse
 
 include("DrawCell.jl")
 
-function runsim(lwallarg, lstage)
+function runsim(lgap, lstage, T1, T2)
     # DSMC Parameters
     flow = 4.0 # sccm
     zmax = 0.35 # m
@@ -10,26 +10,29 @@ function runsim(lwallarg, lstage)
     timestep = 2E-7 # s
     nperstep = 3
     fnum = 3E10*flow # physical particles per simulated particle
-    T1 = 2.0 # temperature of first stage (K)
-    T2 = 0.7 # temperature of second stage (K)
 
     # Cell parameters
-    nstages = 10
-    wallthickness = 2mm
-    wallperiod = 10mm
-    lwall = lwallarg*1000mm
-    gap = lwallarg*1000mm
-
+    gap = lgap*1000mm
     stage_len = lstage*1000mm
     stage_id = 12.7mm
     stage_od = 22.23mm
     raperture = 4.5mm
     facethickness = 0.6mm
 
+    # Particle simulation parameters
+    n_particles = 1000000
+    pflip = 0.1
+    omegas = [0.0, 425.0, 425.0, 539.0, 539.0] # corresponding to 0, 1, 1.6 T at 0.5" radius
+    zmin = 65.09E-3
+    zend = zmin+lstage+1E-3
+    zmaxs = [1E2, zend, 1E2, zend, 1E2]
+    σs = [1.3E-18, 1.3E-18] # collision cross section (m^2)
+    Ms = [191.0, 57.0] # mass of molecule (AMU)
+
     # Paths
     PROG_PATH = pwd()
     TEMPLATE_PATH = "./template"
-    RUN_PATH = @sprintf("./flow_%.5f_gap_%.5f_len_%.5f", flow, gap/(1000mm), lstage)
+    RUN_PATH = @sprintf("./flow_%.5f_gap_%.5f_len_%.5f_T1_%.5f_T2_%.5f", flow, gap/(1000mm), lstage, T1, T2)
     SPARTA_CMD = `mpirun /n/home03/calmiller/programs/sparta/spa -kokkos off`    
 
     mkpath(RUN_PATH)
@@ -46,7 +49,7 @@ function runsim(lwallarg, lstage)
 
     polygons = [stage, mesh...]
 
-    # 
+    # Draw and save cell image
     sethue("black")
     setline(0.1mm)
     for p in polygons
@@ -64,6 +67,11 @@ function runsim(lwallarg, lstage)
 
     toSPARTA(polygons, RUN_PATH*"/data.stages")
 
+    if T1 > 1.9 && T2 > 1.9
+        he = "he3"
+    else
+        he = "he4"
+    end
 
     open(RUN_PATH*"/in.cell", "w") do f
         write(f,@sprintf("""# 2d axial simulation of CBGB cell
@@ -85,9 +93,9 @@ function runsim(lwallarg, lstage)
         units               si
         timestep 	        \${TIMESTEP}
         
-        species		        he3.species He3
-        mixture		        He3 He3 nrho 1 vstream 26.2 0 0 temp 2.0
-        collide             vss He3 He3.vss #kk
+        species		        $(he).species He
+        mixture		        He He nrho 1 vstream 26.2 0 0 temp 2.0
+        collide             vss He $(he).vss #kk
         
         # read_restart data/cell.restart.*
         
@@ -98,7 +106,7 @@ function runsim(lwallarg, lstage)
         
         read_surf           data.cell
         group       inlet surf id 12
-        fix		    in emit/surf He3 inlet n \${NPERSTEP} perspecies no
+        fix		    in emit/surf He inlet n \${NPERSTEP} perspecies no
 
         read_surf           data.diffuser
         
@@ -121,10 +129,9 @@ function runsim(lwallarg, lstage)
         next a
         jump in.cell loop
         
-        compute temp thermal/grid all He3 temp
-        compute rhov grid all He3 nrho massrho u v w
+        compute temp thermal/grid all He temp
+        compute rhov grid all He nrho massrho u v w
         fix out ave/grid all 1000 100 100000 c_temp[*] c_rhov[*]
-        dump out grid all 100000 data/DS2FF.*.DAT xc yc f_out[*]
         
         # Record statistics
         label loop2
@@ -134,18 +141,52 @@ function runsim(lwallarg, lstage)
         next b
         jump in.cell loop2
         
-        # Save surfaces
-        dump surfs surf all 1 data/cell.*.surfs id v1x v1y v2x v2y
-        run 1""", fnum, zmax, rmax, timestep, nperstep, T1, T2))
+        # Save statistics and surfaces
+        dump out grid all 1 data/DS2FF.DAT xc yc f_out[*]
+        dump surfs surf all 1 data/cell.surfs id v1x v1y v2x v2y""", fnum, zmax, rmax, timestep, nperstep, T1, T2))
     end
 
     println("cat $RUN_PATH/in.cell")
 
     cd(RUN_PATH)
     run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
-    run(`sbatch particles_0.slurm`)
-    run(`sbatch particles_300.slurm`)
-    run(`sbatch particles_600.slurm`)
+
+    if he == "he3"
+        m = 3.0
+    else
+        m = 4.0
+    end
+
+    for (i, omega) in enumerate(omegas)
+        for (j, M) in enumerate(Ms)
+            fname = RUN_PATH*@sprintf("/run_omega_%.5f_M_%.1f.cell",omega)
+            open(fname, "w") do f
+                write(f,@sprintf("""#!/bin/bash
+                #SBATCH -n 8 # Number of cores requested
+                #SBATCH -N 1 # Ensure that all cores are on one machine
+                #SBATCH -t 0-08:00 # Runtime in minutes
+                #SBATCH -p shared # Partition to submit to
+                #SBATCH --mem-per-cpu 1024 # Memory per cpu in MB
+                #SBATCH --open-mode=append
+                #SBATCH -o data/particles_omega_%.5f_M_%.1f_job_%j.out # Standard out goes to this file
+                #SBATCH -e data/particles_omega_%.5f_M_%.1f_job_%j.err # Standard err goes to this filehostname
+
+                module load intel/19.0.5-fasrc01 openmpi/4.0.2-fasrc01 fftw/3.3.8-fasrc01 cmake/3.12.1-fasrc01 Anaconda3/2019.10 python/3.7.7-fasrc01
+                module list
+
+                export OMP_PROC_BIND=spread
+                export OMP_PLACES=threads
+                export JULIA_NUM_THREADS=\$SLURM_CPUS_ON_NODE
+
+                cd data
+                pwd
+                echo "running...."
+
+                julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --stats ./stats_omega_%.5f.csv --exitstats ./exitstats_omega_%.5f.csv""", omega, M,omega, M, n_particles, omega, pflip, m, M, σs[j], omega, omega))
+            end
+            run(`sbatch $fname`)
+        end
+    end
     cd(PROG_PATH)
 end
 
@@ -161,15 +202,23 @@ function parse_commandline()
         "-l"
             help = "gap between first and second stage (m)"
             arg_type = Float64
-            default = 0.003
+            default = 0.001
         "-L"
             help = "length of second stage (m)"
             arg_type = Float64
-            default = 0.010
+            default = 0.040
+        "--T1"
+            help = "temperature of first stage (K)"
+            arg_type = Float64
+            default = 2.0
+        "--T2"
+            help = "temperature of second stage (K)"
+            arg_type = Float64
+            default = 2.0
     end
 
     return parse_args(s)
 end
 
 args = parse_commandline()
-runsim(args["l"], args["L"])
+runsim(args["l"], args["L"], args["T1"], args["T2"])
