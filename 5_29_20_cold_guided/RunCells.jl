@@ -123,7 +123,7 @@ function runsim(lgap, lstage, T1, T2)
         # Run until convergence
         label loop
         #variable a loop 75
-        #variable a loop 1
+        variable a loop 1
         run 		    20000
         adapt_grid all refine particle 16 4
         balance_grid rcb part
@@ -133,6 +133,11 @@ function runsim(lgap, lstage, T1, T2)
         compute temp thermal/grid all He temp
         compute rhov grid all He nrho massrho u v w
         fix out ave/grid all 1000 100 100000 c_temp[*] c_rhov[*]
+
+        run 1
+        # Save statistics and surfaces
+        dump out grid all 100000 data/DS2FF.DAT xc yc f_out[*]
+        dump surfs surf all 100000 data/cell.surfs id v1x v1y v2x v2y
         
         # Record statistics
         label loop2
@@ -140,12 +145,7 @@ function runsim(lgap, lstage, T1, T2)
         run 		    10000
         
         next b
-        jump in.cell loop2
-        
-        # Save statistics and surfaces
-        dump out grid all 1 data/DS2FF.DAT xc yc f_out[*]
-        dump surfs surf all 1 data/cell.surfs id v1x v1y v2x v2y
-        run 1""", fnum, zmax, rmax, timestep, nperstep, T1, T2, he, he))
+        jump in.cell loop2""", fnum, zmax, rmax, timestep, nperstep, T1, T2, he, he))
     end
 
     println("cat $RUN_PATH/in.cell")
