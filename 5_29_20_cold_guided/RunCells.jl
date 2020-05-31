@@ -122,8 +122,8 @@ function runsim(lgap, lstage, T1, T2)
         
         # Run until convergence
         label loop
-        #variable a loop 75
-        variable a loop 1
+        variable a loop 75
+        #variable a loop 5
         run 		    20000
         adapt_grid all refine particle 16 4
         balance_grid rcb part
@@ -141,14 +141,12 @@ function runsim(lgap, lstage, T1, T2)
         
         # Record statistics
         label loop2
-        variable b loop 11
+        variable b loop 10
         run 		    10000
         
         next b
         jump in.cell loop2""", fnum, zmax, rmax, timestep, nperstep, T1, T2, he, he))
     end
-
-    println("cat $RUN_PATH/in.cell")
 
     cd(RUN_PATH)
     run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
@@ -161,7 +159,7 @@ function runsim(lgap, lstage, T1, T2)
 
     for (i, omega) in enumerate(omegas)
         for (j, M) in enumerate(Ms)
-            fname = RUN_PATH*@sprintf("/run_omega_%.5f_M_%.1f.cell",omega, M)
+            fname = @sprintf("run_omega_%.5f_M_%.1f.cell",omega, M)
             open(fname, "w") do f
                 write(f,@sprintf("""#!/bin/bash
                 #SBATCH -n 8 # Number of cores requested
@@ -184,7 +182,7 @@ function runsim(lgap, lstage, T1, T2)
                 pwd
                 echo "running...."
 
-                julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --stats ./stats_omega_%.5f.csv --exitstats ./exitstats_omega_%.5f.csv""", omega, M,omega, M, n_particles, omega, pflip, m, M, σs[j], omega, omega))
+                julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --stats ./stats_omega_%.5f_M_%.1f.csv --exitstats ./exitstats_omega_%.5f_M_%.1f.csv""", omega, M,omega, M, n_particles, omega, pflip, m, M, σs[j], omega, M, omega, M))
             end
             run(`sbatch $fname`)
         end

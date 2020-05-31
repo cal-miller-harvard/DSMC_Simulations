@@ -3,11 +3,11 @@
 echo screen
 
 # variables to be set in RunCells.jl
-variable FNUM equal "1.200E+11"
+variable FNUM equal "3.600E+11"
 variable ZMAX equal "3.500E-01"
 variable RMAX equal "3.000E-02"
 variable TIMESTEP equal "2.000E-07"
-variable NPERSTEP equal "3.000E+00"
+variable NPERSTEP equal "1.000E+00"
 variable T1 equal "2.000E+00"
 variable T2 equal "2.000E+00"
 
@@ -46,8 +46,9 @@ stats_style	    wall step cpu np nattempt ncoll nscoll nscheck
 
 # Run until convergence
 label loop
-variable a loop 100
-run 		    10000
+variable a loop 75
+#variable a loop 5
+run 		    20000
 adapt_grid all refine particle 16 4
 balance_grid rcb part
 next a
@@ -57,14 +58,15 @@ compute temp thermal/grid all He temp
 compute rhov grid all He nrho massrho u v w
 fix out ave/grid all 1000 100 100000 c_temp[*] c_rhov[*]
 
+run 1
+# Save statistics and surfaces
+dump out grid all 100000 data/DS2FF.DAT xc yc f_out[*]
+dump surfs surf all 100000 data/cell.surfs id v1x v1y v2x v2y
+
 # Record statistics
 label loop2
-variable b loop 11
+variable b loop 10
 run 		    10000
 
 next b
 jump in.cell loop2
-
-# Save statistics and surfaces
-dump out grid all 1 data/DS2FF.DAT xc yc f_out[*]
-dump surfs surf all 1 data/cell.surfs id v1x v1y v2x v2y
