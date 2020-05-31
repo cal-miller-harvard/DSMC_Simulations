@@ -122,8 +122,7 @@ function runsim(lgap, lstage, T1, T2)
         
         # Run until convergence
         label loop
-        variable a loop 75
-        #variable a loop 5
+        variable a loop 125
         run 		    20000
         adapt_grid all refine particle 16 4
         balance_grid rcb part
@@ -145,7 +144,8 @@ function runsim(lgap, lstage, T1, T2)
         run 		    10000
         
         next b
-        jump in.cell loop2""", fnum, zmax, rmax, timestep, nperstep, T1, T2, he, he))
+        jump in.cell loop2
+        write restart data/restart.slurm""", fnum, zmax, rmax, timestep, nperstep, T1, T2, he, he))
     end
 
     cd(RUN_PATH)
@@ -182,7 +182,7 @@ function runsim(lgap, lstage, T1, T2)
                 pwd
                 echo "running...."
 
-                julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --stats ./stats_omega_%.5f_M_%.1f.csv --exitstats ./exitstats_omega_%.5f_M_%.1f.csv""", omega, M,omega, M, n_particles, omega, pflip, m, M, σs[j], omega, M, omega, M))
+                julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --zmin %.5f --zmax %.5f --stats ./stats_omega_%.5f_M_%.1f_zmax_%.5f.csv --exitstats ./exitstats_omega_%.5f_M_%.1f_zmax_%.5f.csv --saveall 1""", omega, M,omega, M, n_particles, omega, pflip, m, M, σs[j], zmin, zmaxs[j], omega, M, zmaxs[j] omega, M, zmaxs[j]))
             end
             run(`sbatch $fname`)
         end
