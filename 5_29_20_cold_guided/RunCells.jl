@@ -8,8 +8,8 @@ function runsim(lgap, lstage, T1, T2)
     zmax = 0.35 # m
     rmax = 0.03 # m
     timestep = 2E-7 # s
-    nperstep = 3
-    fnum = 3E10*flow # physical particles per simulated particle
+    nperstep = 1
+    fnum = (3.0/nperstep)*3E10*flow # physical particles per simulated particle
 
     # Cell parameters
     gap = lgap*1000mm
@@ -122,8 +122,9 @@ function runsim(lgap, lstage, T1, T2)
         
         # Run until convergence
         label loop
-        variable a loop 100
-        run 		    10000
+        #variable a loop 75
+        #variable a loop 1
+        run 		    20000
         adapt_grid all refine particle 16 4
         balance_grid rcb part
         next a
@@ -143,7 +144,8 @@ function runsim(lgap, lstage, T1, T2)
         
         # Save statistics and surfaces
         dump out grid all 1 data/DS2FF.DAT xc yc f_out[*]
-        dump surfs surf all 1 data/cell.surfs id v1x v1y v2x v2y""", fnum, zmax, rmax, timestep, nperstep, T1, T2, he, he))
+        dump surfs surf all 1 data/cell.surfs id v1x v1y v2x v2y
+        run 1""", fnum, zmax, rmax, timestep, nperstep, T1, T2, he, he))
     end
 
     println("cat $RUN_PATH/in.cell")
