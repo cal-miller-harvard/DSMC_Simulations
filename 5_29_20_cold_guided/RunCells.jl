@@ -181,7 +181,7 @@ function runsim(lgap, lstage, T1, T2, pflip)
                 pwd
                 echo "running...."
 
-                julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --zmin %.5f --zmax %.5f --stats ./stats_omega_%.5f_M_%.1f_zmax_%.5f_pflip_%.5f.csv --exitstats ./exitstats_omega_%.5f_M_%.1f_zmax_%.5f_pflip_%.5f.csv --saveall 1""", omega, M, zmaxs[j], pflip, omega, M, zmaxs[j], pflip, n_particles, omega, pflip, m, M, σs[j], zmin, zmaxs[j], omega, M, zmaxs[j], pflip, omega, M, zmaxs[j], pflip))
+                julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --zmin %.5f --zmax %.5f --stats ./stats_omega_%.5f_M_%.1f_zmax_%.5f_pflip_%.5f.csv --exitstats ./exitstats_omega_%.5f_M_%.1f_zmax_%.5f_pflip_%.5f.csv --saveall 1""", omega, M, zmaxs[i], pflip, omega, M, zmaxs[i], pflip, n_particles, omega, pflip, m, M, σs[j], zmin, zmaxs[i], omega, M, zmaxs[i], pflip, omega, M, zmaxs[i], pflip))
             end
             run(`sbatch $fname`)
         end
