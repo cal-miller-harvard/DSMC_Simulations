@@ -2,7 +2,7 @@ using ArgParse
 
 include("DrawCell.jl")
 
-function runsim(lgap, lstage, T1, T2)
+function runsim(lgap, lstage, T1, T2, pflip)
     # DSMC Parameters
     flow = 4.0 # sccm
     zmax = 0.35 # m
@@ -21,7 +21,6 @@ function runsim(lgap, lstage, T1, T2)
 
     # Particle simulation parameters
     n_particles = 1000000
-    pflip = 0.0
     omegas = [0.0, 425.0, 425.0, 539.0, 539.0] # corresponding to 0, 1, 1.6 T at 0.5" radius
     zmin = 65.09E-3
     zend = zmin+lstage+1E-3
@@ -33,7 +32,7 @@ function runsim(lgap, lstage, T1, T2)
     PROG_PATH = pwd()
     TEMPLATE_PATH = "./template"
     RUN_PATH = @sprintf("./flow_%.5f_gap_%.5f_len_%.5f_T1_%.5f_T2_%.5f", flow, gap/(1000mm), lstage, T1, T2)
-    SPARTA_CMD = `mpirun /n/home03/calmiller/programs/sparta/spa -kokkos off`    
+    SPARTA_CMD = `mpirun /n/home03/calmiller/programs/sparta/spa -kokkos off`
 
     mkpath(RUN_PATH)
     for f in readdir(TEMPLATE_PATH)
@@ -215,10 +214,14 @@ function parse_commandline()
             help = "temperature of second stage (K)"
             arg_type = Float64
             default = 2.0
+        "--pflip"
+            help = "collision spin flip probability"
+            arg_type = Float64
+            default = 0.1
     end
 
     return parse_args(s)
 end
 
 args = parse_commandline()
-runsim(args["l"], args["L"], args["T1"], args["T2"])
+runsim(args["l"], args["L"], args["T1"], args["T2"], args["pflip"])
