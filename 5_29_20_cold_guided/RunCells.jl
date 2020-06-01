@@ -37,7 +37,7 @@ function runsim(lgap, lstage, T1, T2)
 
     mkpath(RUN_PATH)
     for f in readdir(TEMPLATE_PATH)
-       cp(TEMPLATE_PATH*"/"*f, RUN_PATH*"/"*f, force=true)
+#       cp(TEMPLATE_PATH*"/"*f, RUN_PATH*"/"*f, force=true)
     end
     mkpath(RUN_PATH*"/data")
 
@@ -145,11 +145,11 @@ function runsim(lgap, lstage, T1, T2)
         
         next b
         jump in.cell loop2
-        write restart data/restart.slurm""", fnum, zmax, rmax, timestep, nperstep, T1, T2, he, he))
+        write_restart data/restart.slurm""", fnum, zmax, rmax, timestep, nperstep, T1, T2, he, he))
     end
 
     cd(RUN_PATH)
-    run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
+#    run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
 
     if he == "he3"
         m = 3.0
@@ -182,7 +182,7 @@ function runsim(lgap, lstage, T1, T2)
                 pwd
                 echo "running...."
 
-                julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --zmin %.5f --zmax %.5f --stats ./stats_omega_%.5f_M_%.1f_zmax_%.5f.csv --exitstats ./exitstats_omega_%.5f_M_%.1f_zmax_%.5f.csv --saveall 1""", omega, M,omega, M, n_particles, omega, pflip, m, M, σs[j], zmin, zmaxs[j], omega, M, zmaxs[j] omega, M, zmaxs[j]))
+                julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --zmin %.5f --zmax %.5f --stats ./stats_omega_%.5f_M_%.1f_zmax_%.5f.csv --exitstats ./exitstats_omega_%.5f_M_%.1f_zmax_%.5f.csv --saveall 1""", omega, M,omega, M, n_particles, omega, pflip, m, M, σs[j], zmin, zmaxs[j], omega, M, zmaxs[j], omega, M, zmaxs[j]))
             end
             run(`sbatch $fname`)
         end
