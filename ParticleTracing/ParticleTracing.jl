@@ -257,9 +257,9 @@ end
         return freePropagate!(xnext, deepcopy(xnext), v, d, 0, zmin, zmax)
     end
     if zmin < x[3] < zmax
-        return freePropagate!(xnext, x, v, d, ω)
+        return freePropagate!(xnext, x, v, t, ω)
     else
-        return freePropagate!(xnext, x, v, d, 0)
+        return freePropagate!(xnext, x, v, t, 0)
     end
 end
 
