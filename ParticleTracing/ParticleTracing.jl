@@ -211,17 +211,41 @@ Updates xnext by propagating a particle at x with velocity v a distance d in a h
 @inline function freePropagate!(xnext, x, v, t, ω)
     xnext[3] = x[3] + v[3]*t
     if ω != 0
-        sint = ω > 0.0 ? sin(sqrt(2)*ω*t) : sinh(sqrt(2)*ω*t)
-        cost = ω > 0.0 ? cos(sqrt(2)*ω*t) : cosh(sqrt(2)*ω*t)
-        xnext[1] = x[1]*cost + v[1]*sint/(sqrt(2)*ω)
-        xnext[2] = x[2]*cost + v[2]*sint/(sqrt(2)*ω)
-        v[1] = v[1]*cost-2*x[1]*abs(ω)*sint
-        v[2] = v[2]*cost-2*x[2]*abs(ω)*sint
+        pm = sign(ω)
+        ω = abs(ω)
+        if pm > 0
+            sint = sin(sqrt(2.0)*ω*t)
+            cost = cos(sqrt(2.0)*ω*t)
+            v[1] = v[1]*cost-2*x[1]*ω*sint
+            v[2] = v[2]*cost-2*x[2]*ω*sint
+        else
+            sint = sinh(sqrt(2.0)*ω*t)
+            cost = cosh(sqrt(2.0)*ω*t)
+            v[1] = v[1]*cost+2*x[1]*ω*sint
+            v[2] = v[2]*cost+2*x[2]*ω*sint
+        end
+        xnext[1] = x[1]*cost + v[1]*sint/(sqrt(2.0)*ω)
+        xnext[2] = x[2]*cost + v[2]*sint/(sqrt(2.0)*ω)
     else
         xnext[1] = x[1] + v[1]*t
         xnext[2] = x[2] + v[2]*t
     end
 end
+
+# Propagation test code; error grows rapidly now :(
+# xs = []
+# vs = []
+# X = [1.0, 0.0, 0.0]
+# V = [0.0,0.0,0.0]
+# ω = 1.0
+# xnext = deepcopy(X)
+# for i in 1:10000
+#     freePropagate!(xnext, deepcopy(xnext), V, 0.1, ω)
+#     push!(xs, xnext[1])
+#     push!(vs, V[1])
+# end
+# plot(xs, vs)
+
 
 # TODO: Document this
 @inline function freePropagate!(xnext, x, v, d, ω, zmin, zmax)
