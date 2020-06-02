@@ -216,16 +216,18 @@ Updates xnext by propagating a particle at x with velocity v a distance d in a h
         if pm > 0
             sint = sin(sqrt(2.0)*ω*t)
             cost = cos(sqrt(2.0)*ω*t)
+            xnext[1] = x[1]*cost + v[1]*sint/(sqrt(2.0)*ω)
+            xnext[2] = x[2]*cost + v[2]*sint/(sqrt(2.0)*ω)
             v[1] = v[1]*cost-2*x[1]*ω*sint
             v[2] = v[2]*cost-2*x[2]*ω*sint
         else
             sint = sinh(sqrt(2.0)*ω*t)
             cost = cosh(sqrt(2.0)*ω*t)
+            xnext[1] = x[1]*cost + v[1]*sint/(sqrt(2.0)*ω)
+            xnext[2] = x[2]*cost + v[2]*sint/(sqrt(2.0)*ω)
             v[1] = v[1]*cost+2*x[1]*ω*sint
             v[2] = v[2]*cost+2*x[2]*ω*sint
         end
-        xnext[1] = x[1]*cost + v[1]*sint/(sqrt(2.0)*ω)
-        xnext[2] = x[2]*cost + v[2]*sint/(sqrt(2.0)*ω)
     else
         xnext[1] = x[1] + v[1]*t
         xnext[2] = x[2] + v[2]*t
