@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH -n 16 # Number of cores requested
+#SBATCH -n 1 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
 #SBATCH -t 0-08:00 # Runtime in minutes
 #SBATCH -p shared # Partition to submit to
-#SBATCH --mem-per-cpu 512 # Memory per cpu in MB (see also ?mem-per-cpu)
+#SBATCH --mem-per-cpu 4096 # Memory per cpu in MB (see also ?mem-per-cpu)
 #SBATCH --open-mode=append
 #SBATCH -o logs/dsmc_job_%j.out # Standard out goes to this file
 #SBATCH -e logs/dsmc_job_%j.err # Standard err goes to this filehostname

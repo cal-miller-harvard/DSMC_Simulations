@@ -21,12 +21,12 @@ function runsim(lgap, lstage, T1, T2, pflip)
 
     # Particle simulation parameters
     n_particles = 1000000
-    omegas = [0.0, 425.0, 425.0, 539.0, 539.0] # corresponding to 0, 1, 1.6 T at 0.5" radius
+    omegas = [0.0, 539.0]#425.0, 425.0, 539.0, 539.0] # corresponding to 0, 1, 1.6 T at 0.5" radius
     zmin = 65.09E-3
     zend = zmin+lstage+1E-3
-    zmaxs = [1E2, zend, 1E2, zend, 1E2]
-    σs = [1.3E-18, 1.3E-18] # collision cross section (m^2)
-    Ms = [191.0, 57.0] # mass of molecule (AMU)
+    zmaxs = [zend, zend]#[1E2, zend, 1E2, zend, 1E2]
+    σs = [1.3E-18]#, 1.3E-18] # collision cross section (m^2)
+    Ms = [191.0]#, 57.0] # mass of molecule (AMU)
 
     # Paths
     PROG_PATH = pwd()
