@@ -67,7 +67,7 @@ end
 
 @inline function convert(::Type{Matrix}, s::StatsArray)
     # r, z, n, t, tvar, vr, vz, vrcov, vzcov, vrvzcov, ncolls, ncollsvar, lfree, lfreevar
-    M = Array{Float64}(undef, s.rbins*s.zbins, 10)
+    M = Array{Float64}(undef, s.rbins*s.zbins, 14)
     idx = 1
     for i in 1:s.rbins
         for j in 1:s.zbins
