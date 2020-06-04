@@ -14,6 +14,8 @@ import Base: convert
 struct TrajStats
     v::OnlineStat
     t::OnlineStat
+    ncolls::OnlineStat
+    lfree::OnlineStat
 end
 
 struct StatsArray
@@ -28,7 +30,7 @@ struct StatsArray
     zstep::Float64
 end
 
-@inline TrajStats() = TrajStats(CovMatrix(2), Variance())
+@inline TrajStats() = TrajStats(CovMatrix(2), Variance(), Variance(), Variance())
 
 @inline function StatsArray(minr, maxr, rbins, minz, maxz, zbins)
     stats = Array{TrajStats}(undef, rbins, zbins)
@@ -40,12 +42,14 @@ end
     return StatsArray(stats, minr, maxr, rbins, minz, maxz, zbins, rbins/(maxr-minr), zbins/(maxz-minz))
 end
 
-@inline function updateStats!(s::StatsArray, x, v, t)
+@inline function updateStats!(s::StatsArray, x, v, t, ncolls, lfree)
     r = sqrt(x[1]^2+x[2]^2)
     ridx = min(s.rbins, 1+floor(Int, s.rstep*(r-s.minr)))
     zidx = min(s.zbins, 1+floor(Int, s.zstep*(x[3]-s.minz)))
     fit!(s.stats[ridx, zidx].v, [(-x[2]*v[1]+x[1]*v[2])/sqrt(x[1]^2+x[2]^2),v[3]])
     fit!(s.stats[ridx, zidx].t, t)
+    fit!(s.stats[ridx, zidx].ncolls, ncolls)
+    fit!(s.stats[ridx, zidx].lfree, lfree)
     return s.stats[ridx, zidx]
 end
 
@@ -54,13 +58,15 @@ end
         for j in 1:a.zbins
             OnlineStats.merge!(a.stats[i,j].v, b.stats[i,j].v)
             OnlineStats.merge!(a.stats[i,j].t, b.stats[i,j].t)
+            OnlineStats.merge!(a.stats[i,j].ncolls, b.stats[i,j].ncolls)
+            OnlineStats.merge!(a.stats[i,j].lfree, b.stats[i,j].lfree)
         end
     end
     return a
 end
 
 @inline function convert(::Type{Matrix}, s::StatsArray)
-    # r, z, n, t, tvar, vr, vz, vrcov, vzcov, vrvzcov
+    # r, z, n, t, tvar, vr, vz, vrcov, vzcov, vrvzcov, ncolls, ncollsvar, lfree, lfreevar
     M = Array{Float64}(undef, s.rbins*s.zbins, 10)
     idx = 1
     for i in 1:s.rbins
@@ -76,6 +82,10 @@ end
             M[idx,8] = stats.v.A[1,1]
             M[idx,9] = stats.v.A[2,2]
             M[idx,10] = stats.v.A[1,2]
+            M[idx,11] = stats.ncolls.μ
+            M[idx,12] = stats.ncolls.σ2
+            M[idx,13] = stats.lfree.μ
+            M[idx,14] = stats.lfree.σ2
             idx += 1
         end
     end
@@ -84,7 +94,7 @@ end
 
 @inline function convert(::Type{DataFrame}, s::StatsArray)
     m = convert(Matrix, s)
-    df = DataFrame(m, [:r, :z, :n, :t, :tvar, :vr, :vz, :vrvar, :vzvar, :vrvzcov])
+    df = DataFrame(m, [:r, :z, :n, :t, :tvar, :vr, :vz, :vrvar, :vzvar, :vrvzcov, :ncolls, :ncollsvar, :lfree, :lfreevar])
     return df
 end
 
@@ -363,13 +373,13 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
             time += dist / LinearAlgebra.norm(v)
             collides += 1
         end
+        if !isnothing(stats)
+            updateStats!(stats, x, v, time, collides, dist)
+        end
         x .= xnext
         collide!(v, props[3], props[4], props[5], props[6])
         if rand() < pflip
             ω = -ω
-        end
-        if !isnothing(stats)
-            updateStats!(stats, x, v, time)
         end
     end
 end
