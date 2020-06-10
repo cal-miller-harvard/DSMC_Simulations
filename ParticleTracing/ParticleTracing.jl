@@ -7,6 +7,7 @@ using DataFrames
 using Printf
 using ArgParse
 using OnlineStats
+using SpecialFunctions
 
 import Base: convert
 
@@ -191,25 +192,111 @@ const MASS_REDUCED = MASS_PARTICLE * MASS_BUFFER_GAS /
 const kB = 8314.46                    # AMU m^2 / (s^2 K)
 const σ_BUFFER_GAS_PARTICLE = args["sigma"] # m^2
 
+struct SampleParams
+    μ_vg::Float64
+    σ_vg::Float64
+    σ_θ::Float64
+end
+
+struct LookupTable
+    Tmin::Float64
+    Tstep::Float64
+    Tmax::Float64
+    nT::Int64
+    Umin::Float64
+    Ustep::Float64
+    Umax::Float64
+    nU::Int64
+    table::Matrix{SampleParams}
+end
+
+# TODO: Document this
+@inline function g(x, μ, σ)
+    exp(-0.5*((x-μ)/σ)^2)/(σ*sqrt(2*π))
+end
+
+# TODO: Document this
+function sample(u, T, μ_vg, σ_vg, σ_θ, M=1.5)
+    if T < 1E-2
+        return (u, 0.0)
+    end
+    v_g = 0.0
+    θ = 0.0
+    bessel = 0.0
+    while true
+        y = abs(μ_vg + σ_vg * Random.randn())
+        bessel = SpecialFunctions.besseli(0, MASS_BUFFER_GAS*u*y/(kB*T))
+        f_y = exp(-MASS_BUFFER_GAS*(u^2+y^2)/(2*kB*T)) * y * bessel * MASS_BUFFER_GAS / (kB*T)
+        r = f_y/(M*g(y, μ_vg, σ_vg))
+        if Random.rand() < r
+            v_g = y
+            break
+        end
+    end
+    while true
+        y = abs(σ_θ * Random.randn())
+        f_y = exp(MASS_BUFFER_GAS * u * v_g * cos(y) / (kB*T)) / (pi * bessel)
+        r = f_y/(2*M*g(y, 0, σ_θ))
+        if Random.rand() < r && y < π
+            θ = y
+            break
+        end
+    end
+    return v_g, θ
+end
+
+# TODO: Document this
+function sample(u, T, table, M=2.0)
+    i_T = max(1,min(round(Int64, (T - table.Tmin) / table.Tstep), table.nT))
+    i_U = max(1,min(round(Int64, (u - table.Umin) / table.Ustep), table.nU))
+    p = table.table[i_T, i_U]
+    return sample(max(table.Umin,min(u, table.Umax)), max(table.Tmin,min(T, table.Tmax)), p.μ_vg, 1.5*p.σ_vg, 3*p.σ_θ, M)
+end
+
+# TODO: Document this
+function generate_lookup_table(Tmin, Tstep, Tmax, Umin, Ustep, Umax, nsamples=100, Msample=20)
+    Ts = Tmin:Tstep:Tmax
+    Us = Umin:Ustep:Umax
+    table = LookupTable(Tmin, Tstep, Tmax, length(Ts), Umin, Ustep, Umax, length(Us), Matrix{SampleParams}(undef, length(Ts), length(Us)))
+    for (i, T) in enumerate(Ts)
+        for (j, U) in enumerate(Us)
+            σ_vg = 1.5*sqrt(8*kB*(T+0.2)/(π*MASS_BUFFER_GAS))
+            σ_θ = 1.5*pi*σ_vg/(σ_vg+U)
+            μ_vg = U + σ_vg
+            vg_samples = zeros(nsamples)
+            θ_samples = zeros(nsamples)
+            for i in 1:nsamples
+                vg_samples[i], θ_samples[i] = sample(U, T, μ_vg, σ_vg, σ_θ, Msample)
+            end
+            table.table[i,j] = SampleParams(mean(vg_samples), std(vg_samples), std(θ_samples))
+        end
+    end
+    return table
+end
+
 """
     collide!(v, vgx, vgy, vgz, T)
 
 Accepts as input the velocity of a particle v, the mean velocity of a buffer gas atom vgx, vgy, vgz, and the buffer gas temperature T. Computes the velocity of the particle after they undergo a collision, treating the particles as hard spheres and assuming a random scattering parameter and buffer gas atom velocity (assuming the particles are moving slower than the buffer gas atoms). Follows Appendices B and C of Boyd 2017. Note that v and vg are modified.
 """
-@inline function collide!(v, vgx, vgy, vgz, T)
-    vg = sqrt(abs(-2 * kB * T / MASS_BUFFER_GAS * log(1-Random.rand())))
-    θv = π * Random.rand()
-    φv = 2 * π * Random.rand()
-    vgx += Random.randn() * vg * sin(θv) * cos(φv)
-    vgy += Random.randn() * vg * sin(θv) * sin(φv)
-    vgz += Random.randn() * vg * cos(θv)
+@inline function collide!(v, vg, T, table)
+    u = sqrt((v[1]-vg[1])^2+(v[2]-vg[2])^2+(v[3]-vg[3])^2)
+    vgmag, θ = sample(u, T, table)
+    if u < 1E-3
+        vgdir = LinearAlgebra.normalize(Random.rand(3) .- 0.5)
+    else
+        vgdir = (vg - v) ./ u
+    end
+    vrand = LinearAlgebra.normalize(Random.rand(3) .- 0.5)
+    vperp = LinearAlgebra.normalize(vrand .- dot(vrand, vgdir) .* vgdir)
+    vg = v .+ vgmag .* (cos(θ) .* vgdir .+ sin(θ) .* vperp)
     cosχ = 2*Random.rand() - 1
     sinχ = sqrt(1 - cosχ^2)
     θ = 2 * π * Random.rand()
-    g = sqrt((v[1] - vgx)^2 + (v[2] - vgy)^2 + (v[3] - vgz)^2)
-    v[1] = MASS_PARTICLE * v[1] + MASS_BUFFER_GAS * (vgx + g * cosχ)
-    v[2] = MASS_PARTICLE * v[2] + MASS_BUFFER_GAS * (vgy + g * sinχ * cos(θ))
-    v[3] = MASS_PARTICLE * v[3] + MASS_BUFFER_GAS * (vgz + g * sinχ * sin(θ))
+    g = sqrt((v[1] - vg[1])^2 + (v[2] - vg[2])^2 + (v[3] - vg[3])^2)
+    v[1] = MASS_PARTICLE * v[1] + MASS_BUFFER_GAS * (vg[1] + g * cosχ)
+    v[2] = MASS_PARTICLE * v[2] + MASS_BUFFER_GAS * (vg[2] + g * sinχ * cos(θ))
+    v[3] = MASS_PARTICLE * v[3] + MASS_BUFFER_GAS * (vg[3] + g * sinχ * sin(θ))
     v .= v ./ (MASS_PARTICLE + MASS_BUFFER_GAS)
 end
 
@@ -343,7 +430,7 @@ end
 
 Accepts as input the position of a particle xinit, its velocity v, the function interp!, which takes as input a position and a vector and updates the vector to describe the gas [x, y, vgx, vgy, vgz, T, ρ], and the function getCollision(x1, x2), which returns whether if the segment from x1 to x2 intersects geometry. Computes the path of the particle until it getCollision returns true. Returns a vector of simulation results with elements x, y, z, xnext, ynext, znext, vx, vy, vz, collides, time.
 """
-@inline function propagate(xinit, vin, interp!, getCollision, ω=0.0, zmin=-Inf, zmax=Inf, pflip=0.0, stats=nothing)
+@inline function propagate(xinit, vin, interp!, getCollision, table, ω=0.0, zmin=-Inf, zmax=Inf, pflip=0.0, stats=nothing)
     x = deepcopy(xinit)
     props = zeros(8) # x, y, vgx, vgy, vgz, T, ρ, dmin
     interp!(props, x)
@@ -353,7 +440,7 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
     collides = 0
     
     if LinearAlgebra.norm(v) < 1E-6
-        collide!(v, props[3], props[4], props[5], props[6])
+        collide!(v, view(props, 3:5), props[6], table)
         collides += 1
     end
 
@@ -377,7 +464,7 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
             updateStats!(stats, x, v, time, collides, dist)
         end
         x .= xnext
-        collide!(v, props[3], props[4], props[5], props[6])
+        collide!(v, view(props, 3:5), props[6], table)
         if rand() < pflip
             ω = -ω
         end
@@ -413,7 +500,7 @@ function SimulateParticles(
 
     # Reorder columns and only include grid cells with data
     DataFrames.select!(griddf, [:x, :y, :vx, :vy, :vz, :T, :ρ])
-    grids = griddf[griddf.T .> 0, :]
+    griddf = griddf[griddf.T .> 0, :]
     griddf[!, :dmin] .= 0
     grids = Matrix(griddf)
 
@@ -436,6 +523,15 @@ function SimulateParticles(
     end
 
     @printf(stderr, "Mean dmin: %f\n", sum(grids[:,8]/size(grids)[1]))
+
+    # Set up the lookup table for sampling collision velocities
+    Tmin = minimum(griddf.T)
+    Tmax = maximum(griddf.T)
+    Tstep = (Tmax - Tmin) / 20
+    Umin = 0.0
+    Umax = 1.5*maximum(sqrt.(griddf.vx.^2 .+ griddf.vy.^2))
+    Ustep = (Umax - Umin) / 20
+    table = generate_lookup_table(Tmin, Tstep, Tmax, Umin, Ustep, Umax)
 
     """
         interpolate!(props, x)
@@ -479,7 +575,7 @@ function SimulateParticles(
         return 0
     end
 
-    output_dim = length(propagate(zeros(3), zeros(3), interpolate!, (x,y)->true))
+    output_dim = length(propagate(zeros(3), zeros(3), interpolate!, (x,y)->true, table))
     outputs = zeros(nParticles, output_dim)
     if !isnothing(savestats)
         allstats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
@@ -491,7 +587,7 @@ function SimulateParticles(
     Threads.@threads for i in 1:nParticles
         stats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
         xpart, vpart = generateParticle()
-        outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision, ω, zmin, zmax, pflip, stats)
+        outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision, table, ω, zmin, zmax, pflip, stats)
         colltype = getCollision(outputs[i,[1,2,3]], outputs[i,[4,5,6]])
         if !isnothing(savestats)
             merge!(allstats, stats)
