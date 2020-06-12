@@ -76,10 +76,10 @@ function runsim(lgap, lstage, T1, T2, pflip, flow)
         balance_grid        rcb cell
         
         read_surf           data.cell
-        group       inlet surf id 12
+        group       inlet surf id 1
         fix		    in emit/surf He inlet n \${NPERSTEP} perspecies no
 
-        read_surf           data.diffuser
+        # read_surf           data.diffuser
         
         # read_surf           data.stages trans 65.09E-3 0 0 group stages
         
