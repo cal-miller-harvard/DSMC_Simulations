@@ -632,9 +632,11 @@ function main(args)
 
     # Define particle generation
     boltzmann = sqrt(kB*args["T"]/MASS_PARTICLE)
-    generateParticle() = (
-        [args["r"], 0.0, args["z"]],
+    function generateParticle()
+
+        return ([0.0635*sqrt(Random.rand()), 0.0, 0.021+0.0381*Random.rand()],
         [args["vr"] + Random.randn() * boltzmann, Random.randn() * boltzmann, args["vz"] + Random.randn() * boltzmann])
+    end
 
     # Set simulation parameters and run simulation
     nthreads = Threads.nthreads()
