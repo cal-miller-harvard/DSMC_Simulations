@@ -39,9 +39,9 @@ function runsim(lgap, lstage, T1, T2, pflip, flow)
     mkpath(RUN_PATH*"/data")
 
     if T1 > 1.9 && T2 > 1.9
-        he = "he3"
-    else
         he = "he4"
+    else
+        he = "he3"
     end
 
     open(RUN_PATH*"/in.cell", "w") do f
