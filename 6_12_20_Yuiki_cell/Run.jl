@@ -3,7 +3,7 @@ using Printf
 flows = [2.0, 5.0, 10.0, 30.0, 70.0]
 
 for flow in flows
-    fname = "run_flow_$(flow).sh"
+    fname = "run_flow_$(flow).slurm"
     open(fname, "w") do f
         write(f,@sprintf("""#!/bin/bash
         #SBATCH -n 24 # Number of cores requested
