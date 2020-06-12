@@ -9,6 +9,7 @@ function runsim(lgap, lstage, T1, T2, pflip, flow)
     fnum = (3.0/nperstep)*3E10*flow # physical particles per simulated particle
 
     # Cell parameters
+    mm = 1.0
     gap = lgap*1000mm
     stage_len = lstage*1000mm
     stage_id = 12.7mm
