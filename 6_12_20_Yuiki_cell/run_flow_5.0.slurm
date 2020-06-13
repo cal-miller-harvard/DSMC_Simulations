@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -n 1 # Number of cores requested
+#SBATCH -n 32 # Number of cores requested
 #SBATCH -N 1 # Ensure that all cores are on one machine
 #SBATCH -t 0-08:00 # Runtime in minutes
 #SBATCH -p shared # Partition to submit to
@@ -17,4 +17,4 @@ export JULIA_NUM_THREADS=$SLURM_CPUS_ON_NODE
 
 echo "running...."
 
-julia RunCells.jl --T1 2.0000 --T2 2.0000 -l 0.0000 -L 0.0000 --flow 5.0000
+julia RunCells.jl --T1 4.0000 --T2 4.0000 -l 0.0000 -L 0.0000 --flow 5.0000
