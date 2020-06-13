@@ -23,8 +23,8 @@ function runsim(lgap, lstage, T1, T2, pflip, flow)
     zmin = 65.09E-3
     zend = zmin+lstage+1E-3
     zmaxs = [zend]
-    σs = [1.3E-18] # collision cross section (m^2)
-    Ms = [191.0] # mass of molecule (AMU)
+    σs = [1E-18, 3.0E-18, 1E-18] # collision cross section (m^2)
+    Ms = [191.0, 191.0, 106.0] # mass of molecule (AMU)
 
     # Paths
     PROG_PATH = pwd()
