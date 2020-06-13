@@ -34,7 +34,7 @@ function runsim(lgap, lstage, T1, T2, pflip, flow)
 
     mkpath(RUN_PATH)
     for f in readdir(TEMPLATE_PATH)
-       cp(TEMPLATE_PATH*"/"*f, RUN_PATH*"/"*f, force=true)
+    #    cp(TEMPLATE_PATH*"/"*f, RUN_PATH*"/"*f, force=true)
     end
     mkpath(RUN_PATH*"/data")
 
@@ -120,7 +120,7 @@ function runsim(lgap, lstage, T1, T2, pflip, flow)
     end
 
     cd(RUN_PATH)
-    run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
+    # run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
 
     if he == "he3"
         m = 3.0

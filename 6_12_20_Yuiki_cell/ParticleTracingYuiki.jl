@@ -634,7 +634,7 @@ function main(args)
     boltzmann = sqrt(kB*args["T"]/MASS_PARTICLE)
     function generateParticle()
 
-        return ([0.0635*sqrt(Random.rand()), 0.0, 0.021+0.0381*Random.rand()],
+        return ([0.00635*sqrt(Random.rand()), 0.0, 0.021+0.0381*Random.rand()],
         [args["vr"] + Random.randn() * boltzmann, Random.randn() * boltzmann, args["vz"] + Random.randn() * boltzmann])
     end
 
