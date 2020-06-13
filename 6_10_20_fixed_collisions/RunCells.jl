@@ -1,4 +1,4 @@
-using ArgParse
+using ArgParse, Luxor, Printf
 
 include("DrawCell.jl")
 
@@ -25,8 +25,8 @@ function runsim(lgap, lstage, T1, T2, pflip)
     zmin = 65.09E-3
     zend = zmin+lstage+1E-3
     zmaxs = [zend]#, zend]#[1E2, zend, 1E2, zend, 1E2]
-    σs = [1.3E-18]#, 1.3E-18]#, 1.3E-18] # collision cross section (m^2)
-    Ms = [57.0]#[191.0, 57.0] # mass of molecule (AMU)
+    σs = [1.3E-18, 1.3E-18]#, 1.3E-18]#, 1.3E-18] # collision cross section (m^2)
+    Ms = [191.0, 57.0]#[191.0, 57.0] # mass of molecule (AMU)
 
     # Paths
     PROG_PATH = pwd()
@@ -36,7 +36,7 @@ function runsim(lgap, lstage, T1, T2, pflip)
 
     mkpath(RUN_PATH)
     for f in readdir(TEMPLATE_PATH)
-#       cp(TEMPLATE_PATH*"/"*f, RUN_PATH*"/"*f, force=true)
+        cp(TEMPLATE_PATH*"/"*f, RUN_PATH*"/"*f, force=true)
     end
     mkpath(RUN_PATH*"/data")
 
@@ -67,9 +67,9 @@ function runsim(lgap, lstage, T1, T2, pflip)
     toSPARTA(polygons, RUN_PATH*"/data.stages")
 
     if T1 > 1.9 && T2 > 1.9
-        he = "he3"
-    else
         he = "he4"
+    else
+        he = "he3"
     end
 
     open(RUN_PATH*"/in.cell", "w") do f
@@ -93,7 +93,7 @@ function runsim(lgap, lstage, T1, T2, pflip)
         timestep 	        \${TIMESTEP}
         
         species		        %s.species He
-        mixture		        He He nrho 1 vstream 26.2 0 0 temp 2.0
+        mixture		        He He nrho 1 vstream 26.2 0 0 temp \${T1}
         collide             vss He %s.vss #kk
         
         # read_restart data/cell.restart.*
@@ -148,7 +148,7 @@ function runsim(lgap, lstage, T1, T2, pflip)
     end
 
     cd(RUN_PATH)
-#    run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
+    run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
 
     if he == "he3"
         m = 3.0
