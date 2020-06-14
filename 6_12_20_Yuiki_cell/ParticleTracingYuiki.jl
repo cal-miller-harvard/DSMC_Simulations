@@ -407,7 +407,7 @@ end
 Accepts as input the velocity of a particle relative to a buffer gas atom v, the buffer gas temperature T and the buffer gas density ρ. Draws a distance the particle travels before it hits a buffer gas atom from an exponential distribution, accounting for a velocity-dependent mean free path. Note that this assumes that the gas properties don't change significantly over a mean free path.
 """
 @inline function freePath(v, vrel, T, ρ)
-    λ = sqrt(v[1]^2 + v[2]^2 + v[3]^2)/(ρ*σ_BUFFER_GAS_PARTICLE*sqrt(3*kB*T/MASS_BUFFER_GAS + vrel^2))
+    λ = sqrt(v[1]^2 + v[2]^2 + v[3]^2)/(ρ*σ_BUFFER_GAS_PARTICLE*sqrt(8*kB*T/(MASS_BUFFER_GAS*pi) + vrel^2))
     return min(-log(Random.rand()) * λ, 1000.0)
 end
 
