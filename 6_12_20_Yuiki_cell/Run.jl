@@ -25,7 +25,7 @@ for flow in flows
         echo "running...."
 
         julia RunCells.jl --T1 %.4f --T2 %.4f -l %.4f -L %.4f --flow %.4f
-        """, 4.0, 4.0, 0.0, 0.0, flow))
+        """, 2.0, 2.0, 0.0, 0.0, flow))
     end
     run(`sbatch $fname`)
 end
