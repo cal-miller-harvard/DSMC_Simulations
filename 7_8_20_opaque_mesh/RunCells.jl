@@ -44,7 +44,7 @@ function runsim(lgap, lstage, T1, T2, pflip)
     Drawing(round(Int32,zmax*1000mm), round(Int32,rmax*1000mm), RUN_PATH*"/cell.pdf")
 
     stage = Point(gap, 0) + make_stage(stage_len, stage_id, stage_od, raperture, facethickness)
-    mesh = Point(BoundingBox(stage).corner2.x, 0.36mm) .+ make_mesh(:y, 7, 0.425mm, 0.425mm, 0.624mm)
+    mesh = Point(BoundingBox(stage).corner2.x, 0.1mm) .+ make_mesh(:y, 7, 0.425mm, 0.425mm, 0.624mm)
 
     polygons = [stage, mesh...]
 
