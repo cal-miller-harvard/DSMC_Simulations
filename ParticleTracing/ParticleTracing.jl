@@ -12,6 +12,8 @@ using SpecialFunctions
 import Base: convert
 
 # Data structures and functions for tracking trajectory statistics
+
+# Statistics to be recorded for each grid cell. Currently includes velocity, time, number of collisions, and free path
 struct TrajStats
     v::OnlineStat
     t::OnlineStat
@@ -19,6 +21,9 @@ struct TrajStats
     lfree::OnlineStat
 end
 
+@inline TrajStats() = TrajStats(CovMatrix(2), Variance(), Variance(), Variance())
+
+# Grid of TrajStats, including spatial information for indexing
 struct StatsArray
     stats::Matrix{TrajStats}
     minr::Float64
@@ -31,7 +36,6 @@ struct StatsArray
     zstep::Float64
 end
 
-@inline TrajStats() = TrajStats(CovMatrix(2), Variance(), Variance(), Variance())
 
 @inline function StatsArray(minr, maxr, rbins, minz, maxz, zbins)
     stats = Array{TrajStats}(undef, rbins, zbins)
@@ -43,6 +47,7 @@ end
     return StatsArray(stats, minr, maxr, rbins, minz, maxz, zbins, rbins/(maxr-minr), zbins/(maxz-minz))
 end
 
+# Updates a StatsArray given a position and the value of the statistics
 @inline function updateStats!(s::StatsArray, x, v, t, ncolls, lfree)
     r = sqrt(x[1]^2+x[2]^2)
     ridx = min(s.rbins, 1+floor(Int, s.rstep*(r-s.minr)))
@@ -54,6 +59,8 @@ end
     return s.stats[ridx, zidx]
 end
 
+# Merges two StatsArrays by merging each statistic for each cell
+# TODO: Improve performance by only merging cells that the particle passed through (keep track of active cells)?
 @inline function merge!(a::StatsArray, b::StatsArray)
     for i in 1:a.rbins
         for j in 1:a.zbins
@@ -66,8 +73,8 @@ end
     return a
 end
 
+# Converts a StatsArray to a matrix with rows r, z, n, t, tvar, vr, vz, vrcov, vzcov, vrvzcov, ncolls, ncollsvar, lfree, lfreevar
 @inline function convert(::Type{Matrix}, s::StatsArray)
-    # r, z, n, t, tvar, vr, vz, vrcov, vzcov, vrvzcov, ncolls, ncollsvar, lfree, lfreevar
     M = Array{Float64}(undef, s.rbins*s.zbins, 14)
     idx = 1
     for i in 1:s.rbins
@@ -93,6 +100,7 @@ end
     return M
 end
 
+# Converts a StatsArray to a DataFrame with rows r, z, n, t, tvar, vr, vz, vrcov, vzcov, vrvzcov, ncolls, ncollsvar, lfree, lfreevar
 @inline function convert(::Type{DataFrame}, s::StatsArray)
     m = convert(Matrix, s)
     df = DataFrame(m, [:r, :z, :n, :t, :tvar, :vr, :vz, :vrvar, :vzvar, :vrvzcov, :ncolls, :ncollsvar, :lfree, :lfreevar])
@@ -102,7 +110,7 @@ end
 """
     parse_commandline()
 
-Parses command-line arguments.
+Parses command-line arguments. See function for possible arguments
 """
 function parse_commandline()
     s = ArgParseSettings()
@@ -149,17 +157,17 @@ function parse_commandline()
         "--sigma"
             help = "collision cross section between buffer gas and particle (m^2)"
             arg_type = Float64
-            default = 100E-20
+            default = 130E-20
         "--omega"
-            help = "sqrt(v/m) for a harmonic trap of V(x,y,z) = v*(x^2+y^2)"
+            help = "radial trap frequency (rad/s); sqrt(v/m) for a harmonic trap of V(x,y,z) = v*(x^2+y^2)"
             arg_type = Float64
             default = 0.0
         "--zmin"
-            help = "minimum position of harmonic trap"
+            help = "minimum axial position of harmonic trap (m)"
             arg_type = Float64
             default = -Inf
         "--zmax"
-            help = "maximum position of harmonic trap"
+            help = "maximum axial position of harmonic trap (m)"
             arg_type = Float64
             default = Inf
         "--pflip"
@@ -167,7 +175,7 @@ function parse_commandline()
             arg_type = Float64
             default = 0.0
         "--saveall"
-            help = "save all particles or just those that leave the cell"
+            help = "saves all particles if nonzero or just those that leave the cell if zero"
             arg_type = Int
             default = 0
         "--stats"
@@ -183,21 +191,26 @@ function parse_commandline()
     return parse_args(s)
 end
 
+# Parse command line arguments
 args = parse_commandline()
-# Constants
-const MASS_PARTICLE = args["M"]    # AMU
-const MASS_BUFFER_GAS = args["m"]             # AMU
+# Set global constants
+const MASS_PARTICLE = args["M"] # AMU
+const MASS_BUFFER_GAS = args["m"] # AMU
 const MASS_REDUCED = MASS_PARTICLE * MASS_BUFFER_GAS /
     (MASS_PARTICLE + MASS_BUFFER_GAS) # AMU
-const kB = 8314.46                    # AMU m^2 / (s^2 K)
+const kB = 8314.46 # AMU m^2 / (s^2 K)
 const σ_BUFFER_GAS_PARTICLE = args["sigma"] # m^2
 
+# Setup for rejection sampling of collision velocities
+
+# Parameters for proposal distribution for rejection sampling
 struct SampleParams
     μ_vg::Float64
     σ_vg::Float64
     σ_θ::Float64
 end
 
+# Table of parameters for proposal distribution for rejection sampling for different values of temperature T and relative velocity U
 struct LookupTable
     Tmin::Float64
     Tstep::Float64
@@ -210,13 +223,13 @@ struct LookupTable
     table::Matrix{SampleParams}
 end
 
-# TODO: Document this
+# Evaluates the PDF of a Gaussian distribution with mean μ and standard deviation σ at x
 @inline function g(x, μ, σ)
     exp(-0.5*((x-μ)/σ)^2)/(σ*sqrt(2*π))
 end
 
-# TODO: Document this
-function sample(u, T, μ_vg, σ_vg, σ_θ, M=1.5)
+# Given a mean relative velocity u, temperature T and parameters for proposal distributions μ_vg, σ_vg, σ_θ, uses rejection sampling to draw relative speeds v_g and angles θ from the relative velocity. M describes the threshold for accepting a sample. M should be higher if the proposal distribution is farther from the correct distribution.
+function sample(u, T, μ_vg, σ_vg, σ_θ, M=2.0)
     if T < 1E-2
         return (u, 0.0)
     end
@@ -224,7 +237,7 @@ function sample(u, T, μ_vg, σ_vg, σ_θ, M=1.5)
     θ = 0.0
     bessel = 0.0
     i = 0
-    imax = 100
+    imax = 50*M
     while true
         y = abs(μ_vg + σ_vg * Random.randn())
         bessel = SpecialFunctions.besseli(0, min(MASS_BUFFER_GAS*u*y/(kB*T), 10))
@@ -260,7 +273,7 @@ function sample(u, T, μ_vg, σ_vg, σ_θ, M=1.5)
     return v_g, θ
 end
 
-# TODO: Document this
+# Given temperature, mean relative velocity, and a lookup table, samples collision velocities
 function sample(u, T, table, M=2.0)
     i_T = max(1,min(round(Int64, (T - table.Tmin) / table.Tstep), table.nT))
     i_U = max(1,min(round(Int64, (u - table.Umin) / table.Ustep), table.nU))
@@ -268,7 +281,7 @@ function sample(u, T, table, M=2.0)
     return sample(max(table.Umin,min(u, table.Umax)), max(table.Tmin,min(T, table.Tmax)), p.μ_vg, 1.5*p.σ_vg, 3*p.σ_θ, M)
 end
 
-# TODO: Document this
+# Generates a lookup table of means and standard deviations for Gaussian proposal distributions for rejection sampling.
 function generate_lookup_table(Tmin, Tstep, Tmax, Umin, Ustep, Umax, nsamples=100, Msample=20)
     Ts = Tmin:Tstep:Tmax
     Us = Umin:Ustep:Umax
@@ -346,22 +359,7 @@ Updates xnext by propagating a particle at x with velocity v a distance d in a h
     end
 end
 
-# Propagation test code; error grows rapidly now :(
-# xs = []
-# vs = []
-# X = [1.0, 0.0, 0.0]
-# V = [0.0,0.0,0.0]
-# ω = 1.0
-# xnext = deepcopy(X)
-# for i in 1:10000
-#     freePropagate!(xnext, deepcopy(xnext), V, 0.1, ω)
-#     push!(xs, xnext[1])
-#     push!(vs, V[1])
-# end
-# plot(xs, vs)
-
-
-# TODO: Document this
+# Propagates a particle to its next collision by updating xnext. Assumes starting position x, starting velocity v, a step distance of d, and a trap of frequency ω between zmin and zmax.
 @inline function freePropagate!(xnext, x, v, d, ω, zmin, zmax)
     vmag = sqrt(v[1]^2+v[2]^2+v[3]^2)
     if vmag < 1E-6
@@ -454,11 +452,13 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
     time = 0.0
     collides = 0
     
+    # If nearly stationary, provide a first collision
     if LinearAlgebra.norm(v) < 1E-6
         collide!(v, view(props, 3:5), props[6], table)
         collides += 1
     end
 
+    # Randomize the spin
     if rand() < 0.5
         ω = -ω
     end
@@ -467,7 +467,6 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
         interp!(props, x)
         vrel = sqrt((v[1] - props[3])^2 + (v[2] - props[4])^2 + (v[3] - props[5])^2)
         dist = freePath(v, vrel, props[6], props[7])
-        # TODO: Modify to change trap frequency based on collisions
         freePropagate!(xnext, x, v, dist, ω, zmin, zmax)
         if getCollision(x, xnext) != 0
             return (x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time)
@@ -486,7 +485,9 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
     end
 end
 
+# Initializes a variable to track the number of interpolation lookups performed
 interps = 0
+
 """
     SimulateParticles(geomFile, gridFile, nParticles, generateParticle)
 
@@ -522,7 +523,7 @@ function SimulateParticles(
     # Make a tree for efficient nearest neighbor search
     kdtree = KDTree(transpose(Matrix(grids[:,1:2])); leafsize=10)
 
-    # For each point, find the 100 nearest neighbors and compute the distance of the closest point at which any of the parameters varies by more than 10%. Add that distance as a column to grid.
+    # For each point, find the 100 nearest neighbors and compute the distance of the closest point at which any of the parameters varies by more than 20%. Add that distance as a column to grid. This is used to reduce the number of nearest neighbor searches required.
 
     err = 0.2
     for i in 1:size(grids)[1]
@@ -554,7 +555,7 @@ function SimulateParticles(
     Updates the gas properties props with the data from point x.
     """
     @inline function interpolate!(props, x)
-        # x, y, vgx, vgy, vgz, T, ρ, dmin
+        # props: x, y, vgx, vgy, vgz, T, ρ, dmin
         if sqrt((x[3] - props[1])^2 + (sqrt(x[1]^2 + x[2]^2) - props[2])^2) > props[8]
             global interps
             interps += 1
@@ -574,7 +575,7 @@ function SimulateParticles(
     """
         getCollision(x1, x2)
 
-    Checks whether the line between x1 and x2 intersects geometry or the boundary of the simulation region.
+    Checks whether the line between x1 and x2 intersects geometry or the boundary of the simulation region. Returns 0 if no collision, 1 if the particle collides with geometry, or 2 if the particle leaves the simulation bounds
     """
     @inline function getCollision(x1, x2)
         r1 = sqrt(x1[1]^2 + x1[2]^2)
@@ -590,17 +591,23 @@ function SimulateParticles(
         return 0
     end
 
+    # Runs one simulation to check the length of the output array
     output_dim = length(propagate(zeros(3), zeros(3), interpolate!, (x,y)->true, table))
     outputs = zeros(nParticles, output_dim)
+
+    # Initializes statistics arrays
     if !isnothing(savestats)
         allstats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
     end
     if !isnothing(saveexitstats)
         boundstats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
-
     end
+    
     Threads.@threads for i in 1:nParticles
-        stats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
+        stats = nothing
+        if !isnothing(saveexitstats) || !isnothing(savestats)
+            stats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
+        end
         xpart, vpart = generateParticle()
         outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision, table, ω, zmin, zmax, pflip, stats)
         colltype = getCollision(outputs[i,[1,2,3]], outputs[i,[4,5,6]])
