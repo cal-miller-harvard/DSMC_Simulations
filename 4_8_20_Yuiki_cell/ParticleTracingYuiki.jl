@@ -7,21 +7,16 @@ using DataFrames
 using Printf
 using ArgParse
 using OnlineStats
+using SpecialFunctions
 
 import Base: convert
-
-# Constants
-const MASS_PARTICLE = 174 + 16 + 1    # AMU
-const MASS_BUFFER_GAS = 4             # AMU
-const MASS_REDUCED = MASS_PARTICLE * MASS_BUFFER_GAS /
-    (MASS_PARTICLE + MASS_BUFFER_GAS) # AMU
-const kB = 8314.46                    # AMU m^2 / (s^2 K)
-const σ_BUFFER_GAS_PARTICLE = 100E-20 # m^2
 
 # Data structures and functions for tracking trajectory statistics
 struct TrajStats
     v::OnlineStat
     t::OnlineStat
+    ncolls::OnlineStat
+    lfree::OnlineStat
 end
 
 struct StatsArray
@@ -36,7 +31,7 @@ struct StatsArray
     zstep::Float64
 end
 
-@inline TrajStats() = TrajStats(CovMatrix(2), Variance())
+@inline TrajStats() = TrajStats(CovMatrix(2), Variance(), Variance(), Variance())
 
 @inline function StatsArray(minr, maxr, rbins, minz, maxz, zbins)
     stats = Array{TrajStats}(undef, rbins, zbins)
@@ -48,12 +43,14 @@ end
     return StatsArray(stats, minr, maxr, rbins, minz, maxz, zbins, rbins/(maxr-minr), zbins/(maxz-minz))
 end
 
-@inline function updateStats!(s::StatsArray, x, v, t)
+@inline function updateStats!(s::StatsArray, x, v, t, ncolls, lfree)
     r = sqrt(x[1]^2+x[2]^2)
     ridx = min(s.rbins, 1+floor(Int, s.rstep*(r-s.minr)))
     zidx = min(s.zbins, 1+floor(Int, s.zstep*(x[3]-s.minz)))
     fit!(s.stats[ridx, zidx].v, [(-x[2]*v[1]+x[1]*v[2])/sqrt(x[1]^2+x[2]^2),v[3]])
     fit!(s.stats[ridx, zidx].t, t)
+    fit!(s.stats[ridx, zidx].ncolls, ncolls)
+    fit!(s.stats[ridx, zidx].lfree, lfree)
     return s.stats[ridx, zidx]
 end
 
@@ -62,14 +59,16 @@ end
         for j in 1:a.zbins
             OnlineStats.merge!(a.stats[i,j].v, b.stats[i,j].v)
             OnlineStats.merge!(a.stats[i,j].t, b.stats[i,j].t)
+            OnlineStats.merge!(a.stats[i,j].ncolls, b.stats[i,j].ncolls)
+            OnlineStats.merge!(a.stats[i,j].lfree, b.stats[i,j].lfree)
         end
     end
     return a
 end
 
 @inline function convert(::Type{Matrix}, s::StatsArray)
-    # r, z, n, t, tvar, vr, vz, vrcov, vzcov, vrvzcov
-    M = Array{Float64}(undef, s.rbins*s.zbins, 10)
+    # r, z, n, t, tvar, vr, vz, vrcov, vzcov, vrvzcov, ncolls, ncollsvar, lfree, lfreevar
+    M = Array{Float64}(undef, s.rbins*s.zbins, 14)
     idx = 1
     for i in 1:s.rbins
         for j in 1:s.zbins
@@ -84,6 +83,10 @@ end
             M[idx,8] = stats.v.A[1,1]
             M[idx,9] = stats.v.A[2,2]
             M[idx,10] = stats.v.A[1,2]
+            M[idx,11] = stats.ncolls.μ
+            M[idx,12] = stats.ncolls.σ2
+            M[idx,13] = stats.lfree.μ
+            M[idx,14] = stats.lfree.σ2
             idx += 1
         end
     end
@@ -92,248 +95,8 @@ end
 
 @inline function convert(::Type{DataFrame}, s::StatsArray)
     m = convert(Matrix, s)
-    df = DataFrame(m, [:r, :z, :n, :t, :tvar, :vr, :vz, :vrvar, :vzvar, :vrvzcov])
+    df = DataFrame(m, [:r, :z, :n, :t, :tvar, :vr, :vz, :vrvar, :vzvar, :vrvzcov, :ncolls, :ncollsvar, :lfree, :lfreevar])
     return df
-end
-
-"""
-    collide!(v, vgx, vgy, vgz, T)
-
-Accepts as input the velocity of a particle v, the mean velocity of a buffer gas atom vgx, vgy, vgz, and the buffer gas temperature T. Computes the velocity of the particle after they undergo a collision, treating the particles as hard spheres and assuming a random scattering parameter and buffer gas atom velocity (assuming the particles are moving slower than the buffer gas atoms). Follows Appendices B and C of Boyd 2017. Note that v and vg are modified.
-"""
-@inline function collide!(v::Vector, vgx::Number, vgy::Number, vgz::Number, T::Number)
-    vg = sqrt(abs(-2 * kB * T / MASS_BUFFER_GAS * log(1-Random.rand())))
-    θv = π * Random.rand()
-    φv = 2 * π * Random.rand()
-    vgx += Random.randn() * vg * sin(θv) * cos(φv)
-    vgy += Random.randn() * vg * sin(θv) * sin(φv)
-    vgz += Random.randn() * vg * cos(θv)
-    cosχ = 2*Random.rand() - 1
-    sinχ = sqrt(1 - cosχ^2)
-    θ = 2 * π * Random.rand()
-    g = sqrt((v[1] - vgx)^2 + (v[2] - vgy)^2 + (v[3] - vgz)^2)
-    v[1] = MASS_PARTICLE * v[1] + MASS_BUFFER_GAS * (vgx + g * cosχ)
-    v[2] = MASS_PARTICLE * v[2] + MASS_BUFFER_GAS * (vgy + g * sinχ * cos(θ))
-    v[3] = MASS_PARTICLE * v[3] + MASS_BUFFER_GAS * (vgz + g * sinχ * sin(θ))
-    v .= v ./ (MASS_PARTICLE + MASS_BUFFER_GAS)
-end
-
-"""
-    freePropagate!(xnext, x, v, d, ω)
-
-Updates xnext by propagating a particle at x with velocity v a distance d in a harmonic potential with frequency ω
-"""
-@inline function freePropagate!(xnext::Vector, x::Vector, v::Vector, d::Number, ω::Number)
-    if ω != 0
-        t = min(d/LinearAlgebra.norm(v), 1.0)
-        sint = sin(sqrt(2)*ω*t)
-        cost = cos(sqrt(2)*ω*t)
-        xnext[1] = x[1]*cost + v[1]*sint/(sqrt(2)*ω)
-        xnext[2] = x[2]*cost + v[2]*sint/(sqrt(2)*ω)
-        xnext[3] = x[3] + v[3]*t
-        v[1] = v[1]*cost-2*x[1]*ω*sint
-        v[2] = v[2]*cost-2*x[2]*ω*sint
-    else
-        xnext .= x .+ d .* LinearAlgebra.normalize(v)
-    end
-end
-
-"""
-    freePath(vrel, T, ρ)
-
-Accepts as input the velocity of a particle relative to a buffer gas atom v, the buffer gas temperature T and the buffer gas density ρ. Draws a distance the particle travels before it hits a buffer gas atom from an exponential distribution, accounting for a velocity-dependent mean free path. Note that this assumes that the gas properties don't change significantly over a mean free path.
-"""
-@inline function freePath(vrel::Number, T::Number, ρ::Number)
-    return -log(Random.rand()) * sqrt(abs(vrel^2/(3*kB*T/MASS_BUFFER_GAS + vrel^2)))/(ρ*σ_BUFFER_GAS_PARTICLE)
-end
-
-
-"""
-    getIntersection(x1, x2, y2, x3, y3, x4, y4)
-
-Returns whether the line segments ((x1, y1), (x2, y2)) and ((x3, y3), (x4, y4)) intersect. See "Faster Line Segment Intersection" from Graphics Gems III ed. David Kirk.
-"""
-@inline function getIntersection(x1::Number, y1::Number, x2::Number, y2::Number, x3::Number, y3::Number, x4::Number, y4::Number)
-    denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
-    num = x4*(y1 - y3) + x1*(y3-y4) + x3*(y4-y1)
-    if denom > 0
-        if num < 0 || num > denom
-            return false
-        end
-        num = x3*(y2 - y1) + x2*(y1 - y3) + x1*(y3-y2)
-        if num < 0 || num > denom
-            return false
-        end
-    else
-        if num > 0 || num < denom
-            return false
-        end
-        num = x3*(y2 - y1) + x2*(y1 - y3) + x1*(y3-y2)
-        if num > 0 || num < denom
-            return false
-        end
-    end
-    return true
-end
-
-
-"""
-    propagate(xinit, vin, interp!, getCollision, omega=0.0)
-
-Accepts as input the position of a particle xinit, its velocity v, the function interp!, which takes as input a position and a vector and updates the vector to describe the gas [x, y, vgx, vgy, vgz, T, ρ], and the function getCollision(x1, x2), which returns whether if the segment from x1 to x2 intersects geometry. Computes the path of the particle until it getCollision returns true. Returns a vector of simulation results with elements x, y, z, xnext, ynext, znext, vx, vy, vz, collides, time.
-"""
-@inline function propagate(xinit::Vector, vin::Vector, interp!::Function, getCollision::Function, ω=0.0, stats=nothing)
-    x = deepcopy(xinit)
-    props = zeros(8) # x, y, vgx, vgy, vgz, T, ρ, dmin
-    interp!(props, x)
-    xnext = deepcopy(x)
-    v = deepcopy(vin)
-    time = 0.0
-    collides = 0
-    
-    if LinearAlgebra.norm(v) < 1E-6
-        collide!(v, props[3], props[4], props[5], props[6])
-        collides += 1
-    end
-
-    while true
-        interp!(props, x)
-        vrel = sqrt((v[1] - props[3])^2 + (v[2] - props[4])^2 + (v[3] - props[5])^2)
-        dist = freePath(vrel, props[6], props[7])
-        freePropagate!(xnext, x, v, dist, ω)
-        if getCollision(x, xnext) != 0
-            return (x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time)
-        else
-            time += dist / LinearAlgebra.norm(v)
-            collides += 1
-        end
-        x .= xnext
-        collide!(v, props[3], props[4], props[5], props[6])
-        if !isnothing(stats)
-            updateStats!(stats, x, v, time)
-        end
-    end
-end
-
-interps = 0
-"""
-    SimulateParticles(geomFile, gridFile, nParticles, generateParticle)
-
-    Runs nParticles simulations using the SPARTA outputs with paths geomFile and gridFile to define the surfaces and buffer gas properties. Generates each particle with position and velocity returned by generateParticle. Returns a nParticles by 11 matrix of simulation results, with columns x, y, z, xnext, ynext, znext, vx, vy, vz, collides, time.
-"""
-function SimulateParticles(
-    geomFile::AbstractString, 
-    gridFile::AbstractString, 
-    nParticles::Integer,
-    generateParticle::Function,
-    print_stuff=true,
-    ω=0.0,
-    saveall=0,
-    savestats=nothing,
-    saveexitstats=nothing,
-    rbins=100,
-    zbins=100
-    )
-
-    bounds = Matrix(CSV.read(geomFile, header = ["min","max"], skipto=6, limit=2,ignorerepeated=true,delim=' '))
-    geom = Matrix(CSV.read(geomFile, header=["ID","x1","y1","x2","y2"],skipto=10, ignorerepeated=true,delim=' '))
-    griddf = CSV.read(gridFile, header=["x","y","T","ρ","ρm","vx","vy","vz"],skipto=10,ignorerepeated=true,delim=' ')
-
-    # Reorder columns and only include grid cells with data
-    DataFrames.select!(griddf, [:x, :y, :vx, :vy, :vz, :T, :ρ])
-    grids = griddf[griddf.T .> 0, :]
-    griddf[!, :dmin] .= 0
-    grids = Matrix(griddf)
-
-    # Make a tree for efficient nearest neighbor search
-    kdtree = KDTree(transpose(Matrix(grids[:,1:2])); leafsize=10)
-
-    # For each point, find the 100 nearest neighbors and compute the distance of the closest point at which any of the parameters varies by more than 10%. Add that distance as a column to grid.
-
-    err = 0.2
-    for i in 1:size(grids)[1]
-        idxs, dists = knn(kdtree, grids[i,[1,2]], 100, true)
-        for (j, idx) in enumerate(idxs)
-            for k in [3,4,5,6,7]
-                if !(err*grids[i,k] < grids[idx,k] < (1+err)*grids[i,k])
-                    grids[i, 8] = dists[j]
-                    break
-                end
-            end
-        end
-    end
-
-    @printf(stderr, "Mean dmin: %f\n", sum(grids[:,8]/size(grids)[1]))
-
-    """
-        interpolate!(props, x)
-    
-    Updates the gas properties props with the data from point x.
-    """
-    @inline function interpolate!(props::Vector, x::Vector)
-        # x, y, vgx, vgy, vgz, T, ρ, dmin
-        if sqrt((x[3] - props[1])^2 + (sqrt(x[1]^2 + x[2]^2) - props[2])^2) > props[8]
-            global interps
-            interps += 1
-            interp = view(grids, knn(kdtree, [x[3], sqrt(x[1]^2 + x[2]^2)], 1)[1][1], :)
-            props[1] = interp[1]            # x 
-            props[2] = interp[2]            # y
-            θ = atan(x[2],x[1])
-            props[3] = interp[4] * cos(θ)   # vgx
-            props[4] = interp[4] * sin(θ)   # vgy
-            props[5] = interp[3]            # vgz
-            props[6] = interp[6]            # T
-            props[7] = interp[7]            # ρ
-            props[8] = interp[8]
-        end
-    end
-
-    """
-        getCollision(x1, x2)
-
-    Checks whether the line between x1 and x2 intersects geometry or the boundary of the simulation region.
-    """
-    @inline function getCollision(x1::Vector, x2::Vector)
-        r1 = sqrt(x1[1]^2 + x1[2]^2)
-        r2 = sqrt(x2[1]^2 + x2[2]^2)
-        if x2[3] < bounds[1,1] || x2[3] > bounds[1,2] || r2 > bounds[2,2]
-            return 2
-        end
-        for i in 1:size(geom)[1]
-            if getIntersection(geom[i,2],geom[i,3],geom[i,4],geom[i,5],x1[3],r1,x2[3],r2)
-                return 1
-            end
-        end
-        return 0
-    end
-
-    output_dim = length(propagate(zeros(3), zeros(3), interpolate!, (x,y)->true))
-    outputs = zeros(nParticles, output_dim)
-    if !isnothing(savestats)
-        allstats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
-    end
-    if !isnothing(saveexitstats)
-        boundstats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
-
-    end
-    Threads.@threads for i in 1:nParticles
-        stats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
-        xpart, vpart = generateParticle()
-        outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision, ω, stats)
-        colltype = getCollision(outputs[i,[1,2,3]], outputs[i,[4,5,6]])
-        if !isnothing(savestats)
-            merge!(allstats, stats)
-        end
-        if colltype == 2 && !isnothing(saveexitstats)
-            merge!(boundstats, stats)
-        end
-        if print_stuff && (saveall != 0 || colltype == 2)
-            println(@sprintf("%d %e %e %e %e %e %e %e %e %e %d %e", i, 
-            outputs[i,1], outputs[i,2], outputs[i,3], outputs[i,4], outputs[i,5], outputs[i,6], outputs[i,7], outputs[i,8], outputs[i,9], outputs[i,10], outputs[i,11]))
-        end
-    end
-    
-    return outputs, boundstats, allstats
 end
 
 """
@@ -376,19 +139,31 @@ function parse_commandline()
             arg_type = Float64
             default = 0.0
         "-m"
-            help = "mass of buffer gas atoms (AMU); not currently supported"
+            help = "mass of buffer gas atoms (AMU)"
             arg_type = Float64
             default = 4.0
         "-M"
-            help = "mass of particles (AMU); not currently supported"
+            help = "mass of particles (AMU)"
             arg_type = Float64
             default = 191.0
         "--sigma"
-            help = "collision cross section between buffer gas and particle (m^2); not currently supported"
+            help = "collision cross section between buffer gas and particle (m^2)"
             arg_type = Float64
             default = 100E-20
         "--omega"
             help = "sqrt(v/m) for a harmonic trap of V(x,y,z) = v*(x^2+y^2)"
+            arg_type = Float64
+            default = 0.0
+        "--zmin"
+            help = "minimum position of harmonic trap"
+            arg_type = Float64
+            default = -Inf
+        "--zmax"
+            help = "maximum position of harmonic trap"
+            arg_type = Float64
+            default = Inf
+        "--pflip"
+            help = "probability that collision flips spin"
             arg_type = Float64
             default = 0.0
         "--saveall"
@@ -407,13 +182,449 @@ function parse_commandline()
 
     return parse_args(s)
 end
+
+args = parse_commandline()
+# Constants
+const MASS_PARTICLE = args["M"]    # AMU
+const MASS_BUFFER_GAS = args["m"]             # AMU
+const MASS_REDUCED = MASS_PARTICLE * MASS_BUFFER_GAS /
+    (MASS_PARTICLE + MASS_BUFFER_GAS) # AMU
+const kB = 8314.46                    # AMU m^2 / (s^2 K)
+const σ_BUFFER_GAS_PARTICLE = args["sigma"] # m^2
+
+struct SampleParams
+    μ_vg::Float64
+    σ_vg::Float64
+    σ_θ::Float64
+end
+
+struct LookupTable
+    Tmin::Float64
+    Tstep::Float64
+    Tmax::Float64
+    nT::Int64
+    Umin::Float64
+    Ustep::Float64
+    Umax::Float64
+    nU::Int64
+    table::Matrix{SampleParams}
+end
+
+# TODO: Document this
+@inline function g(x, μ, σ)
+    exp(-0.5*((x-μ)/σ)^2)/(σ*sqrt(2*π))
+end
+
+# TODO: Document this
+function sample(u, T, μ_vg, σ_vg, σ_θ, M=1.5)
+    if T < 1E-2
+        return (u, 0.0)
+    end
+    v_g = 0.0
+    θ = 0.0
+    bessel = 0.0
+    i = 0
+    imax = 100
+    while true
+        y = abs(μ_vg + σ_vg * Random.randn())
+        bessel = SpecialFunctions.besseli(0, min(MASS_BUFFER_GAS*u*y/(kB*T), 10))
+        f_y = exp(-MASS_BUFFER_GAS*(u^2+y^2)/(2*kB*T)) * y * bessel * MASS_BUFFER_GAS / (kB*T)
+        r = f_y/(M*g(y, μ_vg, σ_vg))
+        if Random.rand() < r
+            v_g = y
+            break
+        end
+        if i > imax
+            println(stderr, "Maximum iterations exceeded in sampling v_g for u $u, T $T.")
+            v_g = μ_vg
+            break
+        end
+        i += 1
+    end
+    i = 0
+    while true
+        y = abs(σ_θ * Random.randn())
+        f_y = exp(MASS_BUFFER_GAS * u * v_g * cos(y) / (kB*T)) / (pi * bessel)
+        r = f_y/(2*M*g(y, 0, σ_θ))
+        if Random.rand() < r && y < π
+            θ = y
+            break
+        end
+        if i > imax
+            println(stderr, "Maximum iterations exceeded in sampling θ for u $u, T $T.")
+            v_g = μ_vg
+            break
+        end
+        i += 1
+    end
+    return v_g, θ
+end
+
+# TODO: Document this
+function sample(u, T, table, M=2.0)
+    i_T = max(1,min(round(Int64, (T - table.Tmin) / table.Tstep), table.nT))
+    i_U = max(1,min(round(Int64, (u - table.Umin) / table.Ustep), table.nU))
+    p = table.table[i_T, i_U]
+    return sample(max(table.Umin,min(u, table.Umax)), max(table.Tmin,min(T, table.Tmax)), p.μ_vg, 1.5*p.σ_vg, 3*p.σ_θ, M)
+end
+
+# TODO: Document this
+function generate_lookup_table(Tmin, Tstep, Tmax, Umin, Ustep, Umax, nsamples=100, Msample=20)
+    Ts = Tmin:Tstep:Tmax
+    Us = Umin:Ustep:Umax
+    table = LookupTable(Tmin, Tstep, Tmax, length(Ts), Umin, Ustep, Umax, length(Us), Matrix{SampleParams}(undef, length(Ts), length(Us)))
+    for (i, T) in enumerate(Ts)
+        for (j, U) in enumerate(Us)
+            σ_vg = 1.5*sqrt(8*kB*(T+0.2)/(π*MASS_BUFFER_GAS))
+            σ_θ = 1.5*pi*σ_vg/(σ_vg+U)
+            μ_vg = U + σ_vg
+            vg_samples = zeros(nsamples)
+            θ_samples = zeros(nsamples)
+            for i in 1:nsamples
+                vg_samples[i], θ_samples[i] = sample(U, T, μ_vg, σ_vg, σ_θ, Msample)
+            end
+            table.table[i,j] = SampleParams(mean(vg_samples), std(vg_samples), std(θ_samples))
+        end
+    end
+    return table
+end
+
+"""
+    collide!(v, vgx, vgy, vgz, T)
+
+Accepts as input the velocity of a particle v, the mean velocity of a buffer gas atom vgx, vgy, vgz, and the buffer gas temperature T. Computes the velocity of the particle after they undergo a collision, treating the particles as hard spheres and assuming a random scattering parameter and buffer gas atom velocity (assuming the particles are moving slower than the buffer gas atoms). Follows Appendices B and C of Boyd 2017. Note that v and vg are modified.
+"""
+@inline function collide!(v, vg, T, table)
+    u = sqrt((v[1]-vg[1])^2+(v[2]-vg[2])^2+(v[3]-vg[3])^2)
+    vgmag, θ = sample(u, T, table)
+    if u < 1E-3
+        vgdir = LinearAlgebra.normalize(Random.rand(3) .- 0.5)
+    else
+        vgdir = (vg - v) ./ u
+    end
+    vrand = LinearAlgebra.normalize(Random.rand(3) .- 0.5)
+    vperp = LinearAlgebra.normalize(vrand .- dot(vrand, vgdir) .* vgdir)
+    vg = v .+ vgmag .* (cos(θ) .* vgdir .+ sin(θ) .* vperp)
+    cosχ = 2*Random.rand() - 1
+    sinχ = sqrt(1 - cosχ^2)
+    θ = 2 * π * Random.rand()
+    g = sqrt((v[1] - vg[1])^2 + (v[2] - vg[2])^2 + (v[3] - vg[3])^2)
+    v[1] = MASS_PARTICLE * v[1] + MASS_BUFFER_GAS * (vg[1] + g * cosχ)
+    v[2] = MASS_PARTICLE * v[2] + MASS_BUFFER_GAS * (vg[2] + g * sinχ * cos(θ))
+    v[3] = MASS_PARTICLE * v[3] + MASS_BUFFER_GAS * (vg[3] + g * sinχ * sin(θ))
+    v .= v ./ (MASS_PARTICLE + MASS_BUFFER_GAS)
+end
+
+"""
+    freePropagate!(xnext, x, v, d, ω)
+
+Updates xnext by propagating a particle at x with velocity v a distance d in a harmonic potential with frequency ω
+"""
+@inline function freePropagate!(xnext, x, v, t, ω)
+    xnext[3] = x[3] + v[3]*t
+    if ω != 0
+        pm = sign(ω)
+        ω = abs(ω)
+        if pm > 0
+            sint = sin(sqrt(2.0)*ω*t)
+            cost = cos(sqrt(2.0)*ω*t)
+            xnext[1] = x[1]*cost + v[1]*sint/(sqrt(2.0)*ω)
+            xnext[2] = x[2]*cost + v[2]*sint/(sqrt(2.0)*ω)
+            v[1] = v[1]*cost-2*x[1]*ω*sint
+            v[2] = v[2]*cost-2*x[2]*ω*sint
+        else
+            sint = sinh(sqrt(2.0)*ω*t)
+            cost = cosh(sqrt(2.0)*ω*t)
+            xnext[1] = x[1]*cost + v[1]*sint/(sqrt(2.0)*ω)
+            xnext[2] = x[2]*cost + v[2]*sint/(sqrt(2.0)*ω)
+            v[1] = v[1]*cost+2*x[1]*ω*sint
+            v[2] = v[2]*cost+2*x[2]*ω*sint
+        end
+    else
+        xnext[1] = x[1] + v[1]*t
+        xnext[2] = x[2] + v[2]*t
+    end
+end
+
+# Propagation test code; error grows rapidly now :(
+# xs = []
+# vs = []
+# X = [1.0, 0.0, 0.0]
+# V = [0.0,0.0,0.0]
+# ω = 1.0
+# xnext = deepcopy(X)
+# for i in 1:10000
+#     freePropagate!(xnext, deepcopy(xnext), V, 0.1, ω)
+#     push!(xs, xnext[1])
+#     push!(vs, V[1])
+# end
+# plot(xs, vs)
+
+
+# TODO: Document this
+@inline function freePropagate!(xnext, x, v, d, ω, zmin, zmax)
+    vmag = sqrt(v[1]^2+v[2]^2+v[3]^2)
+    if vmag < 1E-6
+        return
+    end
+    t = d/vmag
+    x3next = x[3]+v[3]*t
+    if x[3] > zmax && x3next < zmax
+        t1 = (x[3] - zmax)/v[3]
+        freePropagate!(xnext, x, v, t1, 0)
+        xnext[3] = zmax
+        d -= sqrt((x[1]-xnext[1])^2+(x[2]-xnext[2])^2+(x[3]-xnext[3])^2)
+        return freePropagate!(xnext, deepcopy(xnext), v, d, ω, zmin, zmax)
+    elseif x[3] < zmax && x3next > zmax
+        t1 = (zmax - x[3])/v[3]
+        freePropagate!(xnext, x, v, t1, ω)
+        xnext[3] = zmax
+        d -= sqrt((x[1]-xnext[1])^2+(x[2]-xnext[2])^2+(x[3]-xnext[3])^2)
+        return freePropagate!(xnext, deepcopy(xnext), v, d, 0, zmin, zmax)
+    elseif x[3] > zmin && x3next < zmin
+        t1 = (x[3] - zmin)/v[3]
+        freePropagate!(xnext, x, v, t1, 0)
+        xnext[3] = zmin
+        d -= sqrt((x[1]-xnext[1])^2+(x[2]-xnext[2])^2+(x[3]-xnext[3])^2)
+        return freePropagate!(xnext, deepcopy(xnext), v, d, ω, zmin, zmax)
+    elseif x[3] < zmin && x3next > zmin
+        t1 = (zmin - x[3])/v[3]
+        freePropagate!(xnext, x, v, t1, ω)
+        xnext[3] = zmin
+        d -= sqrt((x[1]-xnext[1])^2+(x[2]-xnext[2])^2+(x[3]-xnext[3])^2)
+        return freePropagate!(xnext, deepcopy(xnext), v, d, 0, zmin, zmax)
+    end
+    if zmin < x[3] < zmax
+        return freePropagate!(xnext, x, v, t, ω)
+    else
+        return freePropagate!(xnext, x, v, t, 0)
+    end
+end
+
+"""
+    freePath(vrel, T, ρ)
+
+Accepts as input the velocity of a particle relative to a buffer gas atom v, the buffer gas temperature T and the buffer gas density ρ. Draws a distance the particle travels before it hits a buffer gas atom from an exponential distribution, accounting for a velocity-dependent mean free path. Note that this assumes that the gas properties don't change significantly over a mean free path.
+"""
+@inline function freePath(v, vrel, T, ρ)
+    λ = sqrt(v[1]^2 + v[2]^2 + v[3]^2)/(ρ*σ_BUFFER_GAS_PARTICLE*sqrt(3*kB*T/MASS_BUFFER_GAS + vrel^2))
+    return min(-log(Random.rand()) * λ, 1000.0)
+end
+
+"""
+    getIntersection(x1, x2, y2, x3, y3, x4, y4)
+
+Returns whether the line segments ((x1, y1), (x2, y2)) and ((x3, y3), (x4, y4)) intersect. See "Faster Line Segment Intersection" from Graphics Gems III ed. David Kirk.
+"""
+@inline function getIntersection(x1, y1, x2, y2, x3, y3, x4, y4)
+    denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+    num = x4*(y1 - y3) + x1*(y3-y4) + x3*(y4-y1)
+    if denom > 0
+        if num < 0 || num > denom
+            return false
+        end
+        num = x3*(y2 - y1) + x2*(y1 - y3) + x1*(y3-y2)
+        if num < 0 || num > denom
+            return false
+        end
+    else
+        if num > 0 || num < denom
+            return false
+        end
+        num = x3*(y2 - y1) + x2*(y1 - y3) + x1*(y3-y2)
+        if num > 0 || num < denom
+            return false
+        end
+    end
+    return true
+end
+
+
+"""
+    propagate(xinit, vin, interp!, getCollision, omega=0.0)
+
+Accepts as input the position of a particle xinit, its velocity v, the function interp!, which takes as input a position and a vector and updates the vector to describe the gas [x, y, vgx, vgy, vgz, T, ρ], and the function getCollision(x1, x2), which returns whether if the segment from x1 to x2 intersects geometry. Computes the path of the particle until it getCollision returns true. Returns a vector of simulation results with elements x, y, z, xnext, ynext, znext, vx, vy, vz, collides, time.
+"""
+@inline function propagate(xinit, vin, interp!, getCollision, table, ω=0.0, zmin=-Inf, zmax=Inf, pflip=0.0, stats=nothing)
+    x = deepcopy(xinit)
+    props = zeros(8) # x, y, vgx, vgy, vgz, T, ρ, dmin
+    interp!(props, x)
+    xnext = deepcopy(x)
+    v = deepcopy(vin)
+    time = 0.0
+    collides = 0
+    
+    if LinearAlgebra.norm(v) < 1E-6
+        collide!(v, view(props, 3:5), props[6], table)
+        collides += 1
+    end
+
+    if rand() < 0.5
+        ω = -ω
+    end
+
+    while true
+        interp!(props, x)
+        vrel = sqrt((v[1] - props[3])^2 + (v[2] - props[4])^2 + (v[3] - props[5])^2)
+        dist = freePath(v, vrel, props[6], props[7])
+        # TODO: Modify to change trap frequency based on collisions
+        freePropagate!(xnext, x, v, dist, ω, zmin, zmax)
+        if getCollision(x, xnext) != 0
+            return (x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time)
+        else
+            time += dist / LinearAlgebra.norm(v)
+            collides += 1
+        end
+        if !isnothing(stats)
+            updateStats!(stats, x, v, time, collides, dist)
+        end
+        x .= xnext
+        collide!(v, view(props, 3:5), props[6], table)
+        if rand() < pflip
+            ω = -ω
+        end
+    end
+end
+
+interps = 0
+"""
+    SimulateParticles(geomFile, gridFile, nParticles, generateParticle)
+
+    Runs nParticles simulations using the SPARTA outputs with paths geomFile and gridFile to define the surfaces and buffer gas properties. Generates each particle with position and velocity returned by generateParticle. Returns a nParticles by 11 matrix of simulation results, with columns x, y, z, xnext, ynext, znext, vx, vy, vz, collides, time.
+"""
+function SimulateParticles(
+    geomFile, 
+    gridFile, 
+    nParticles,
+    generateParticle,
+    print_stuff=true,
+    ω=0.0,
+    zmin=-Inf,
+    zmax=Inf,
+    pflip=0.0,
+    saveall=0,
+    savestats=nothing,
+    saveexitstats=nothing,
+    rbins=100,
+    zbins=100
+    )
+
+    bounds = Matrix(CSV.read(geomFile, header = ["min","max"], skipto=6, limit=2,ignorerepeated=true,delim=' '))
+    geom = Matrix(CSV.read(geomFile, header=["ID","x1","y1","x2","y2"],skipto=10, ignorerepeated=true,delim=' '))
+    griddf = CSV.read(gridFile, header=["x","y","T","ρ","ρm","vx","vy","vz"],skipto=10,ignorerepeated=true,delim=' ')
+
+    # Reorder columns and only include grid cells with data
+    DataFrames.select!(griddf, [:x, :y, :vx, :vy, :vz, :T, :ρ])
+    griddf = griddf[griddf.T .> 0, :]
+    griddf[!, :dmin] .= 0
+    grids = Matrix(griddf)
+
+    # Make a tree for efficient nearest neighbor search
+    kdtree = KDTree(transpose(Matrix(grids[:,1:2])); leafsize=10)
+
+    # For each point, find the 100 nearest neighbors and compute the distance of the closest point at which any of the parameters varies by more than 10%. Add that distance as a column to grid.
+
+    err = 0.2
+    for i in 1:size(grids)[1]
+        idxs, dists = knn(kdtree, grids[i,[1,2]], 100, true)
+        for (j, idx) in enumerate(idxs)
+            for k in [3,4,5,6,7]
+                if !(err*grids[i,k] < grids[idx,k] < (1+err)*grids[i,k])
+                    grids[i, 8] = dists[j]
+                    break
+                end
+            end
+        end
+    end
+
+    @printf(stderr, "Mean dmin: %f\n", sum(grids[:,8]/size(grids)[1]))
+
+    # Set up the lookup table for sampling collision velocities
+    Tmin = minimum(griddf.T)
+    Tmax = maximum(griddf.T)
+    Tstep = (Tmax - Tmin) / 20
+    Umin = 0.0
+    Umax = 1.5*maximum(sqrt.(griddf.vx.^2 .+ griddf.vy.^2))
+    Ustep = (Umax - Umin) / 20
+    table = generate_lookup_table(Tmin, Tstep, Tmax, Umin, Ustep, Umax)
+
+    """
+        interpolate!(props, x)
+    
+    Updates the gas properties props with the data from point x.
+    """
+    @inline function interpolate!(props, x)
+        # x, y, vgx, vgy, vgz, T, ρ, dmin
+        if sqrt((x[3] - props[1])^2 + (sqrt(x[1]^2 + x[2]^2) - props[2])^2) > props[8]
+            global interps
+            interps += 1
+            interp = view(grids, knn(kdtree, [x[3], sqrt(x[1]^2 + x[2]^2)], 1)[1][1], :)
+            props[1] = interp[1]            # x 
+            props[2] = interp[2]            # y
+            θ = atan(x[2],x[1])
+            props[3] = interp[4] * cos(θ)   # vgx
+            props[4] = interp[4] * sin(θ)   # vgy
+            props[5] = interp[3]            # vgz
+            props[6] = interp[6]            # T
+            props[7] = interp[7]            # ρ
+            props[8] = interp[8]
+        end
+    end
+
+    """
+        getCollision(x1, x2)
+
+    Checks whether the line between x1 and x2 intersects geometry or the boundary of the simulation region.
+    """
+    @inline function getCollision(x1, x2)
+        r1 = sqrt(x1[1]^2 + x1[2]^2)
+        r2 = sqrt(x2[1]^2 + x2[2]^2)
+        for i in 1:size(geom)[1]
+            if getIntersection(geom[i,2],geom[i,3],geom[i,4],geom[i,5],x1[3],r1,x2[3],r2)
+                return 1
+            end
+        end
+        if x2[3] < bounds[1,1] || x2[3] > bounds[1,2] || r2 > bounds[2,2]
+            return 2
+        end
+        return 0
+    end
+
+    output_dim = length(propagate(zeros(3), zeros(3), interpolate!, (x,y)->true, table))
+    outputs = zeros(nParticles, output_dim)
+    if !isnothing(savestats)
+        allstats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
+    end
+    if !isnothing(saveexitstats)
+        boundstats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
+
+    end
+    Threads.@threads for i in 1:nParticles
+        stats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
+        xpart, vpart = generateParticle()
+        outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision, table, ω, zmin, zmax, pflip, stats)
+        colltype = getCollision(outputs[i,[1,2,3]], outputs[i,[4,5,6]])
+        if !isnothing(savestats)
+            merge!(allstats, stats)
+        end
+        if colltype == 2 && !isnothing(saveexitstats)
+            merge!(boundstats, stats)
+        end
+        if print_stuff && (saveall != 0 || colltype == 2)
+            println(@sprintf("%d %e %e %e %e %e %e %e %e %e %d %e", i, 
+            outputs[i,1], outputs[i,2], outputs[i,3], outputs[i,4], outputs[i,5], outputs[i,6], outputs[i,7], outputs[i,8], outputs[i,9], outputs[i,10], outputs[i,11]))
+        end
+    end
+    
+    return outputs, boundstats, allstats
+end
+
 """
     main()
 
 The main function starts a particle simulation based on the command line arguments, printing outputs to stdout and timing information to stderr.
 """
-function main()
-    args = parse_commandline()
+function main(args)
 
     nParticles = args["n"]
 
@@ -421,12 +632,11 @@ function main()
 
     # Define particle generation
     boltzmann = sqrt(kB*args["T"]/MASS_PARTICLE)
-    # generateParticle() = (
-#        [args["r"], 0.0, args["z"]],
-        # [args["vr"] + Random.randn() * boltzmann, Random.randn() * boltzmann, args["vz"] + Random.randn() * boltzmann])
-    generateParticle() = (
-        [args["r"] + Random.randn()*0.005/3, Random.randn()*0.005/3, args["z"] + Random.randn()*0.005/3],
+    function generateParticle()
+
+        return ([0.0635*sqrt(Random.rand()), 0.0, 0.021+0.0381*Random.rand()],
         [args["vr"] + Random.randn() * boltzmann, Random.randn() * boltzmann, args["vz"] + Random.randn() * boltzmann])
+    end
 
     # Set simulation parameters and run simulation
     nthreads = Threads.nthreads()
@@ -439,6 +649,9 @@ function main()
         generateParticle,
         true,
         args["omega"],
+        args["zmin"],
+        args["zmax"],
+        args["pflip"],
         args["saveall"],
         !isnothing(args["stats"]),
         !isnothing(args["exitstats"]))
@@ -460,4 +673,4 @@ function main()
     return allstats
 end
 
-allstats = main()
+allstats = main(args)
