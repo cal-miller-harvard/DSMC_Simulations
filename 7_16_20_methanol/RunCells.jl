@@ -2,7 +2,7 @@ using ArgParse, Luxor, Printf
 
 include("DrawCell.jl")
 
-const SCCM = 2.652E19 # particles per second
+const SCCM = 4.41941E17 # particles per second
 
 function runsim(lgap, lstage, T1, T2, pflip)
     # Methanol
@@ -33,8 +33,8 @@ function runsim(lgap, lstage, T1, T2, pflip)
     PROG_PATH = pwd()
     TEMPLATE_PATH = "./template"
     RUN_PATH = @sprintf("./flow_%.5f_gap_%.5f_len_%.5f_T1_%.5f_T2_%.5f_methanol_%.5f_T_%.5f", flow, gap/(1000mm), lstage, T1, T2, methanol_flow, methanol_T)
-    # SPARTA_CMD = `mpirun /n/home03/calmiller/programs/sparta/spa -kokkos off`
-    SPARTA_CMD = `/usr/local/bin/spa_kokkos_omp`
+    SPARTA_CMD = `mpirun /n/home03/calmiller/programs/sparta/spa -kokkos off`
+    # SPARTA_CMD = `/usr/local/bin/spa_kokkos_omp`
 
     mkpath(RUN_PATH)
     for f in readdir(TEMPLATE_PATH)
