@@ -1,0 +1,100 @@
+# 2d axial simulation of CBGB cell
+
+echo screen
+
+# variables to be set in RunCells.jl
+variable FNUM equal "3.536E+11"
+variable ZMAX equal "3.500E-01"
+variable RMAX equal "3.000E-02"
+variable TIMESTEP equal "2.000E-07"
+variable NPERSTEP equal "1.000E+00"
+variable METHANOLPERSTEP equal "1.000E+00"
+variable METHANOLNEVERY equal "50"
+variable T1 equal "2.000E+00"
+variable T2 equal "2.000E+00"
+variable TM equal "2.500E+02"
+variable FIRSTSTAGE equal "5.860E-02"
+
+global		        fnum ${FNUM} cellmax 10000
+seed	    	    12345
+dimension   	    2
+units               si
+timestep 	        ${TIMESTEP}
+
+species		        he4.species He
+mixture		        He He nrho 1 vstream 26.2 0 0 temp ${T1}
+species		        methanol.species methanol
+mixture		        methanol methanol nrho 1 vstream 26.2 0 0 temp ${TM}
+
+collide             vss all he4.vss #kk
+
+
+# read_restart data/cell.restart.*
+
+boundary	        o ao p
+create_box  	    0 ${ZMAX} 0 ${RMAX} -0.1 0.1
+create_grid 	    20 20 1 
+balance_grid        rcb cell
+
+read_surf   data.stages
+group       inlet surf id 1
+group       methanolinlet surf id 52
+region      stagesr cylinder z 0 0 100 ${FIRSTSTAGE} 100
+group       stages surf region stagesr one
+
+group       hot surf id 52:53
+
+fix		    in emit/surf He inlet n ${NPERSTEP} perspecies no normal yes
+fix         in2 emit/surf methanol methanolinlet n ${METHANOLPERSTEP} perspecies no nevery ${METHANOLPERSTEP} normal yes
+
+surf_collide	    diffuse diffuse ${T1} 1.0
+surf_collide	    cold diffuse ${T2} 1.0
+surf_collide        hot diffuse ${TM} 1.0
+
+surf_react          stick prob methanol.surf
+
+surf_modify         all collide diffuse react stick
+surf_modify         stages collide cold
+surf_modify         hot collide hot react none
+
+stats		    1000
+stats_style	    wall step cpu np nattempt ncoll nscoll nscheck
+
+# Run until convergence
+label loop
+variable a loop 50
+run 		    20000
+adapt_grid all refine particle 16 4
+balance_grid rcb part
+next a
+jump in.cell loop
+
+compute temp thermal/grid all He temp
+compute rhov grid all He nrho massrho u v w
+fix out ave/grid all 100 1000 100000 c_temp[*] c_rhov[*]
+
+compute methanoltemp thermal/grid all methanol temp
+compute methanolrhov grid all methanol nrho massrho u v w
+fix methanolout ave/grid all 100 1000 100000 c_methanoltemp[*] c_methanolrhov[*]
+
+compute collisions react/surf all stick r:methanol p:methanol
+fix collisions ave/surf all 1 100000 100000 c_collisions[*]
+
+run 100000
+# Save statistics and surfaces
+dump out grid all 100000 data/DS2FF.DAT xc yc f_out[*]
+dump out2 grid all 100000 data/DS2FF.methanol.DAT xc yc f_methanolout[*]
+dump surfs surf all 100000 data/cell.surfs id v1x v1y v2x v2y f_collisions[*]
+
+dump_modify out append no format float %.5f
+dump_modify out2 append no format float %.5f
+dump_modify surfs append no format float %.5f
+
+# Record statistics
+label loop2
+variable b loop 10
+run 		    10000
+
+next b
+jump in.cell loop2
+write_restart data/restart.slurm
