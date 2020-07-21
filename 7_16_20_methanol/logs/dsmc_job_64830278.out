@@ -1,15 +1,57 @@
+running....
+Running without a11y support!
 SPARTA (24 Jan 2020)
-# 2d axial simulation of CBGB cell
 
-echo screen
+# variables to be set in RunCells.jl
+variable FNUM equal "3.536E+11"
+variable ZMAX equal "3.500E-01"
+variable RMAX equal "3.000E-02"
+variable TIMESTEP equal "2.000E-07"
+variable NPERSTEP equal "1.000E+00"
+variable METHANOLPERSTEP equal "1.000E+00"
+variable METHANOLNEVERY equal "50"
+variable T1 equal "2.000E+00"
+variable T2 equal "2.000E+00"
+variable TM equal "2.500E+02"
+variable FIRSTSTAGE equal "5.860E-02"
+
+global		        fnum ${FNUM} cellmax 10000
+global		        fnum 353600000000 cellmax 10000
+seed	    	    12345
+dimension   	    2
+units               si
+timestep 	        ${TIMESTEP}
+timestep 	        2e-07
+
+species		        he4.species He
+mixture		        He He nrho 1 vstream 26.2 0 0 temp ${T1}
+mixture		        He He nrho 1 vstream 26.2 0 0 temp 2
+species		        methanol.species methanol
+mixture		        methanol methanol nrho 1 vstream 26.2 0 0 temp ${TM}
+mixture		        methanol methanol nrho 1 vstream 26.2 0 0 temp 250
+
+collide             vss all he4.vss #kk
+
+
+# read_restart data/cell.restart.*
+
+boundary	        o ao p
+create_box  	    0 ${ZMAX} 0 ${RMAX} -0.1 0.1
+create_box  	    0 0.35 0 ${RMAX} -0.1 0.1
+create_box  	    0 0.35 0 0.03 -0.1 0.1
 Created orthogonal box = (0 0 -0.1) to (0.35 0.03 0.1)
+create_grid 	    20 20 1
 Created 400 child grid cells
   parent cells = 1
   CPU time = 0.00279503 secs
   create/ghost percent = 66.0326 33.9674
+balance_grid        rcb cell
 Balance grid migrated 388 cells
   CPU time = 0.00185826 secs
   reassign/sort/migrate/ghost percent = 64.1043 3.79516 13.894 18.2066
+
+read_surf   data.stages
+Reading surface file ...
   90 points
   90 lines
   0 0.08112 xlo xhi
@@ -24,15 +66,49 @@ Balance grid migrated 388 cells
   51 0 = cells overlapping surfs, overlap cells with unmarked corner pts
   347 2 51 = cells outside/inside/overlapping surfs
   27 24 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278472 0.000920528553278472 = cell-wise and global flow volume
   CPU time = 0.00861903 secs
   read/check/sort/surf2grid/ghost/inout/particle percent = 33.5818 2.62488 0.775853 15.854 47.1635 4.86951 0.151954
   surf2grid time = 0.00136646 secs
   map/rvous1/rvous2/split percent = 6.41849 31.8447 0.273627 51.8017
+group       inlet surf id 1
 1 surfaces in group inlet
+group       methanolinlet surf id 49
 1 surfaces in group methanolinlet
+region      stagesr cylinder z 0 0 100 ${FIRSTSTAGE} 100
+region      stagesr cylinder z 0 0 100 0.0586 100
+group       stages surf region stagesr one
 0 surfaces in group stages
+
+group       hot surf id 49:51
 3 surfaces in group hot
+
+fix		    in emit/surf He inlet n ${NPERSTEP} perspecies no
+fix		    in emit/surf He inlet n 1 perspecies no
+fix         in2 emit/surf methanol methanolinlet n ${METHANOLPERSTEP} perspecies no nevery ${METHANOLPERSTEP}
+fix         in2 emit/surf methanol methanolinlet n 1 perspecies no nevery ${METHANOLPERSTEP}
+fix         in2 emit/surf methanol methanolinlet n 1 perspecies no nevery 1
+
+surf_collide	    diffuse diffuse ${T1} 1.0
+surf_collide	    diffuse diffuse 2 1.0
+surf_collide	    cold diffuse ${T2} 1.0
+surf_collide	    cold diffuse 2 1.0
+surf_collide        hot diffuse ${TM} 1.0
+surf_collide        hot diffuse 250 1.0
+
+surf_react          stick prob methanol.surf
+
+surf_modify         all collide diffuse react stick
+surf_modify         stages collide cold
+surf_modify         hot collide hot react none
+
+stats		    1000
+stats_style	    wall step cpu np nattempt ncoll nscoll nscheck
+
+# Run until convergence
+label loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 0 0 0
   grid      (ave,min,max) = 1.88888 1.88888 1.88888
@@ -83,7 +159,7 @@ SurfColl occurs   = 503565 (0.504M)
 Surf reactions    = 16368 (16.4K)
 Collide attempts  = 8494932 (8.49M)
 Collide occurs    = 749099 (0.749M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.01725e+06
@@ -95,10 +171,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 1.63971e-07
 Surface-checks/particle/step: 2.49708
 Surface-collisions/particle/step: 0.00196595
-Surf-reactions/particle/step: 6.39018e-05
+Surface-reactions/particle/step: 6.39018e-05
 Collision-attempts/particle/step: 0.0331648
 Collisions/particle/step: 0.00292454
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -107,27 +183,33 @@ Surface reaction tallies:
 
 Particles: 982.917 ave 8729 max 0 min
 Histogram: 19 1 0 0 2 0 1 0 0 1
-Cells:      18.6667 ave 34 max 16 min
+Cells:     18.6667 ave 34 max 16 min
 Histogram: 20 0 0 0 0 1 1 1 0 1
 GhostCell: 429.333 ave 432 max 414 min
 Histogram: 1 0 1 1 0 1 0 0 0 20
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   457 19 110 = cells outside/inside/overlapping surfs
   74 36 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278472 0.000920528553278472 = cell-wise and global flow volume
   62 cells refined, 0 cells coarsened
   adapted to 586 child grid cells, 63 parent cells
   CPU time = 0.00136839 secs
   adapt/redo percent = 50.9881 49.0119
+balance_grid rcb part
 Balance grid migrated 565 cells
   CPU time = 0.00314874 secs
   reassign/sort/migrate/ghost percent = 12.224 0.886355 35.8194 51.0703
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 1.89408 1.89408 1.89408
@@ -178,7 +260,7 @@ SurfColl occurs   = 889034 (0.889M)
 Surf reactions    = 20066 (20.1K)
 Collide attempts  = 16021578 (16M)
 Collide occurs    = 1489842 (1.49M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 4.76765e+06
@@ -190,10 +272,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 6.08307e-07
 Surface-checks/particle/step: 1.0911
 Surface-collisions/particle/step: 0.00132876
-Surf-reactions/particle/step: 2.99909e-05
+Surface-reactions/particle/step: 2.99909e-05
 Collision-attempts/particle/step: 0.0239461
 Collisions/particle/step: 0.00222674
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -202,27 +284,33 @@ Surface reaction tallies:
 
 Particles: 1796.54 ave 6520 max 720 min
 Histogram: 5 14 4 0 0 0 0 0 0 1
-Cells:      27.4167 ave 463 max 3 min
+Cells:     27.4167 ave 463 max 3 min
 Histogram: 23 0 0 0 0 0 0 0 0 1
 GhostCell: 630.583 ave 655 max 195 min
 Histogram: 1 0 0 0 0 0 0 0 0 23
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   916 20 262 = cells outside/inside/overlapping surfs
   246 16 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278472 0.000920528553278472 = cell-wise and global flow volume
   204 cells refined, 0 cells coarsened
   adapted to 1198 child grid cells, 267 parent cells
   CPU time = 0.00327 secs
   adapt/redo percent = 18.8575 81.1425
+balance_grid rcb part
 Balance grid migrated 606 cells
   CPU time = 0.00210631 secs
   reassign/sort/migrate/ghost percent = 18.2142 1.0921 29.8396 50.8541
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 1.9112 1.9112 1.9112
@@ -273,7 +361,7 @@ SurfColl occurs   = 1234298 (1.23M)
 Surf reactions    = 20142 (20.1K)
 Collide attempts  = 25797442 (25.8M)
 Collide occurs    = 2408993 (2.41M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.35499e+07
@@ -285,10 +373,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 1.00985e-06
 Surface-checks/particle/step: 0.344594
 Surface-collisions/particle/step: 0.00117369
-Surf-reactions/particle/step: 1.91529e-05
+Surface-reactions/particle/step: 1.91529e-05
 Collision-attempts/particle/step: 0.0245307
 Collisions/particle/step: 0.0022907
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -297,27 +385,33 @@ Surface reaction tallies:
 
 Particles: 2579.71 ave 3441 max 1787 min
 Histogram: 1 1 0 4 5 9 3 0 0 1
-Cells:      51.25 ave 513 max 16 min
+Cells:     51.25 ave 513 max 16 min
 Histogram: 22 1 0 0 0 0 0 0 0 1
 GhostCell: 1178.75 ave 1214 max 717 min
 Histogram: 1 0 0 0 0 0 0 0 1 22
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   2688 61 489 = cells outside/inside/overlapping surfs
   476 13 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278472 0.000920528553278472 = cell-wise and global flow volume
   680 cells refined, 0 cells coarsened
   adapted to 3238 child grid cells, 947 parent cells
   CPU time = 0.00481366 secs
   adapt/redo percent = 11.6472 88.3528
+balance_grid rcb part
 Balance grid migrated 1060 cells
   CPU time = 0.00245129 secs
   reassign/sort/migrate/ghost percent = 16.4729 0.537024 19.7567 63.2333
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 1.96827 1.96827 1.96827
@@ -368,7 +462,7 @@ SurfColl occurs   = 1592273 (1.59M)
 Surf reactions    = 20009 (20K)
 Collide attempts  = 38243292 (38.2M)
 Collide occurs    = 3587114 (3.59M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.52761e+07
@@ -380,10 +474,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 1.37638e-06
 Surface-checks/particle/step: 0.156572
 Surface-collisions/particle/step: 0.00112158
-Surf-reactions/particle/step: 1.40941e-05
+Surface-reactions/particle/step: 1.40941e-05
 Collision-attempts/particle/step: 0.0269382
 Collisions/particle/step: 0.00252672
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -392,27 +486,33 @@ Surface reaction tallies:
 
 Particles: 3331.25 ave 4130 max 2570 min
 Histogram: 1 0 1 4 5 10 2 0 0 1
-Cells:      136 ave 670 max 58 min
+Cells:     136 ave 670 max 58 min
 Histogram: 15 5 3 0 0 0 0 0 0 1
 GhostCell: 3128 ave 3206 max 2594 min
 Histogram: 1 0 0 0 0 0 0 3 5 15
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   8037 84 733 = cells outside/inside/overlapping surfs
   713 20 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278471 0.000920528553278472 = cell-wise and global flow volume
   1872 cells refined, 0 cells coarsened
   adapted to 8854 child grid cells, 2819 parent cells
   CPU time = 0.0119104 secs
   adapt/redo percent = 8.88035 91.1197
+balance_grid rcb part
 Balance grid migrated 2113 cells
   CPU time = 0.00407227 secs
   reassign/sort/migrate/ghost percent = 13.4782 0.69546 15.7012 70.1251
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 3.06287 3.06287 3.06287
@@ -463,7 +563,7 @@ SurfColl occurs   = 1972280 (1.97M)
 Surf reactions    = 20074 (20.1K)
 Collide attempts  = 54852265 (54.9M)
 Collide occurs    = 5171420 (5.17M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.59665e+07
@@ -475,10 +575,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 1.69474e-06
 Surface-checks/particle/step: 0.083462
 Surface-collisions/particle/step: 0.00111454
-Surf-reactions/particle/step: 1.13438e-05
+Surface-reactions/particle/step: 1.13438e-05
 Collision-attempts/particle/step: 0.0309971
 Collisions/particle/step: 0.00292237
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -487,27 +587,33 @@ Surface reaction tallies:
 
 Particles: 4036.54 ave 4688 max 3538 min
 Histogram: 1 1 2 8 4 4 3 0 0 1
-Cells:      370.583 ave 821 max 198 min
+Cells:     370.583 ave 821 max 198 min
 Histogram: 5 6 3 3 6 0 0 0 0 1
 GhostCell: 8523.42 ave 8696 max 8073 min
 Histogram: 1 0 0 0 0 6 3 3 6 5
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   12958 122 829 = cells outside/inside/overlapping surfs
   805 24 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278471 0.000920528553278472 = cell-wise and global flow volume
   1685 cells refined, 0 cells coarsened
   adapted to 13909 child grid cells, 4504 parent cells
   CPU time = 0.0189333 secs
   adapt/redo percent = 9.55008 90.4499
+balance_grid rcb part
 Balance grid migrated 2145 cells
   CPU time = 0.00632624 secs
   reassign/sort/migrate/ghost percent = 9.65059 0.550675 18.6502 71.1485
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 3.20428 3.20428 3.20428
@@ -558,7 +664,7 @@ SurfColl occurs   = 2357930 (2.36M)
 Surf reactions    = 20028 (20K)
 Collide attempts  = 74521754 (74.5M)
 Collide occurs    = 7043963 (7.04M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.56147e+07
@@ -570,10 +676,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 1.84419e-06
 Surface-checks/particle/step: 0.0748586
 Surface-collisions/particle/step: 0.00112305
-Surf-reactions/particle/step: 9.5391e-06
+Surface-reactions/particle/step: 9.5391e-06
 Collision-attempts/particle/step: 0.0354938
 Collisions/particle/step: 0.00335496
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -582,27 +688,33 @@ Surface reaction tallies:
 
 Particles: 4707.38 ave 5562 max 4304 min
 Histogram: 2 5 4 7 4 1 0 0 0 1
-Cells:      581.542 ave 904 max 419 min
+Cells:     581.542 ave 904 max 419 min
 Histogram: 2 2 8 6 4 1 0 0 0 1
 GhostCell: 13375.5 ave 13538 max 13053 min
 Histogram: 1 0 0 0 1 3 7 8 2 2
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   16835 162 935 = cells outside/inside/overlapping surfs
   901 34 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.00092052855327847 0.000920528553278472 = cell-wise and global flow volume
   1341 cells refined, 0 cells coarsened
   adapted to 17932 child grid cells, 5845 parent cells
   CPU time = 0.0256529 secs
   adapt/redo percent = 10.0442 89.9558
+balance_grid rcb part
 Balance grid migrated 3424 cells
   CPU time = 0.00732692 secs
   reassign/sort/migrate/ghost percent = 8.18172 0.595448 13.9932 77.2297
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 4.25433 4.25433 4.25433
@@ -653,7 +765,7 @@ SurfColl occurs   = 2725086 (2.73M)
 Surf reactions    = 19916 (19.9K)
 Collide attempts  = 96033140 (96M)
 Collide occurs    = 9116997 (9.12M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.55213e+07
@@ -665,10 +777,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 2.06324e-06
 Surface-checks/particle/step: 0.0687796
 Surface-collisions/particle/step: 0.00112993
-Surf-reactions/particle/step: 8.25795e-06
+Surface-reactions/particle/step: 8.25795e-06
 Collision-attempts/particle/step: 0.0398191
 Collisions/particle/step: 0.00378026
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -677,27 +789,33 @@ Surface reaction tallies:
 
 Particles: 5336.88 ave 6286 max 5034 min
 Histogram: 6 4 9 3 1 0 0 0 0 1
-Cells:      750 ave 1109 max 539 min
+Cells:     750 ave 1109 max 539 min
 Histogram: 1 1 9 4 3 4 1 0 0 1
 GhostCell: 17250 ave 17461 max 16891 min
 Histogram: 1 0 0 1 3 4 4 8 2 1
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   19729 188 1006 = cells outside/inside/overlapping surfs
   965 41 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.00092052855327847 0.000920528553278472 = cell-wise and global flow volume
   997 cells refined, 0 cells coarsened
   adapted to 20923 child grid cells, 6842 parent cells
   CPU time = 0.0314106 secs
   adapt/redo percent = 9.99411 90.0059
+balance_grid rcb part
 Balance grid migrated 1580 cells
   CPU time = 0.0083391 secs
   reassign/sort/migrate/ghost percent = 7.91286 0.883524 4.10889 87.0947
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 4.338 4.338 4.338
@@ -748,7 +866,7 @@ SurfColl occurs   = 3086507 (3.09M)
 Surf reactions    = 20051 (20.1K)
 Collide attempts  = 119145983 (119M)
 Collide occurs    = 11344047 (11.3M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.54043e+07
@@ -760,10 +878,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 2.24551e-06
 Surface-checks/particle/step: 0.0638126
 Surface-collisions/particle/step: 0.00114237
-Surf-reactions/particle/step: 7.42125e-06
+Surface-reactions/particle/step: 7.42125e-06
 Collision-attempts/particle/step: 0.0440982
 Collisions/particle/step: 0.00419865
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -772,27 +890,33 @@ Surface reaction tallies:
 
 Particles: 5915.29 ave 6537 max 5504 min
 Histogram: 2 1 6 5 5 2 1 0 0 2
-Cells:      875.208 ave 1324 max 699 min
+Cells:     875.208 ave 1324 max 699 min
 Histogram: 6 4 4 5 3 1 0 0 0 1
 GhostCell: 20129.8 ave 20306 max 19681 min
 Histogram: 1 0 0 0 1 3 5 4 4 6
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   22035 204 1099 = cells outside/inside/overlapping surfs
   1045 54 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.00092052855327847 0.000920528553278472 = cell-wise and global flow volume
   805 cells refined, 0 cells coarsened
   adapted to 23338 child grid cells, 7647 parent cells
   CPU time = 0.0356611 secs
   adapt/redo percent = 9.25895 90.741
+balance_grid rcb part
 Balance grid migrated 1755 cells
   CPU time = 0.00907437 secs
   reassign/sort/migrate/ghost percent = 7.25352 0.801565 4.22718 87.7177
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 4.40556 4.40556 4.40556
@@ -843,7 +967,7 @@ SurfColl occurs   = 3425908 (3.43M)
 Surf reactions    = 19902 (19.9K)
 Collide attempts  = 142961120 (143M)
 Collide occurs    = 13644844 (13.6M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.54075e+07
@@ -855,10 +979,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 2.37027e-06
 Surface-checks/particle/step: 0.0572096
 Surface-collisions/particle/step: 0.00115297
-Surf-reactions/particle/step: 6.69788e-06
+Surface-reactions/particle/step: 6.69788e-06
 Collision-attempts/particle/step: 0.0481126
 Collisions/particle/step: 0.00459208
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -867,27 +991,33 @@ Surface reaction tallies:
 
 Particles: 6459.25 ave 7268 max 6156 min
 Histogram: 4 5 6 4 4 0 0 0 0 1
-Cells:      976.917 ave 1502 max 688 min
+Cells:     976.917 ave 1502 max 688 min
 Histogram: 2 4 6 4 4 2 1 0 0 1
 GhostCell: 22469.1 ave 22758 max 21944 min
 Histogram: 1 0 0 1 2 4 4 6 4 2
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   23904 214 1152 = cells outside/inside/overlapping surfs
   1091 61 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278471 0.000920528553278472 = cell-wise and global flow volume
   644 cells refined, 0 cells coarsened
   adapted to 25270 child grid cells, 8291 parent cells
   CPU time = 0.0399191 secs
   adapt/redo percent = 11.8307 88.1693
+balance_grid rcb part
 Balance grid migrated 1404 cells
   CPU time = 0.00968306 secs
   reassign/sort/migrate/ghost percent = 7.46527 0.770087 3.72479 88.0398
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 5.3971 5.3971 5.3971
@@ -938,7 +1068,7 @@ SurfColl occurs   = 3747733 (3.75M)
 Surf reactions    = 19966 (20K)
 Collide attempts  = 167471560 (167M)
 Collide occurs    = 16010244 (16M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.53252e+07
@@ -950,10 +1080,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 2.48346e-06
 Surface-checks/particle/step: 0.0532909
 Surface-collisions/particle/step: 0.00116269
-Surf-reactions/particle/step: 6.19421e-06
+Surface-reactions/particle/step: 6.19421e-06
 Collision-attempts/particle/step: 0.051956
 Collisions/particle/step: 0.00496699
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -962,27 +1092,33 @@ Surface reaction tallies:
 
 Particles: 6960.46 ave 7598 max 6650 min
 Histogram: 3 3 5 3 7 2 0 0 0 1
-Cells:      1058 ave 1534 max 760 min
+Cells:     1058 ave 1534 max 760 min
 Histogram: 2 3 6 2 5 2 2 1 0 1
 GhostCell: 24334 ave 24632 max 23858 min
 Histogram: 1 0 1 2 2 5 2 6 3 2
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   25577 240 1217 = cells outside/inside/overlapping surfs
   1148 69 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278471 0.000920528553278472 = cell-wise and global flow volume
   588 cells refined, 0 cells coarsened
   adapted to 27034 child grid cells, 8879 parent cells
   CPU time = 0.0416053 secs
   adapt/redo percent = 10.3335 89.6665
+balance_grid rcb part
 Balance grid migrated 1252 cells
   CPU time = 0.0103857 secs
   reassign/sort/migrate/ghost percent = 6.82 0.872854 3.21001 89.0971
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 5.44645 5.44645 5.44645
@@ -1033,7 +1169,7 @@ SurfColl occurs   = 4058811 (4.06M)
 Surf reactions    = 19929 (19.9K)
 Collide attempts  = 191334195 (191M)
 Collide occurs    = 18338874 (18.3M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.52047e+07
@@ -1045,10 +1181,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 2.62073e-06
 Surface-checks/particle/step: 0.048934
 Surface-collisions/particle/step: 0.00117549
-Surf-reactions/particle/step: 5.77174e-06
+Surface-reactions/particle/step: 5.77174e-06
 Collision-attempts/particle/step: 0.0554133
 Collisions/particle/step: 0.00531122
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -1057,27 +1193,33 @@ Surface reaction tallies:
 
 Particles: 7419.71 ave 7986 max 7162 min
 Histogram: 4 6 3 4 4 0 1 1 0 1
-Cells:      1132.17 ave 1618 max 832 min
+Cells:     1132.17 ave 1618 max 832 min
 Histogram: 3 4 2 4 5 2 1 2 0 1
 GhostCell: 26039.8 ave 26340 max 25554 min
 Histogram: 1 0 2 1 2 5 4 2 4 3
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   27201 260 1262 = cells outside/inside/overlapping surfs
   1189 73 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278472 0.000920528553278472 = cell-wise and global flow volume
   563 cells refined, 0 cells coarsened
   adapted to 28723 child grid cells, 9442 parent cells
   CPU time = 0.045929 secs
   adapt/redo percent = 10.9396 89.0604
+balance_grid rcb part
 Balance grid migrated 1575 cells
   CPU time = 0.011086 secs
   reassign/sort/migrate/ghost percent = 6.44388 0.808689 3.44036 89.3071
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 5.4937 5.4937 5.4937
@@ -1128,7 +1270,7 @@ SurfColl occurs   = 4326804 (4.33M)
 Surf reactions    = 19833 (19.8K)
 Collide attempts  = 215471016 (215M)
 Collide occurs    = 20660238 (20.7M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.47101e+07
@@ -1140,10 +1282,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 2.70871e-06
 Surface-checks/particle/step: 0.0464198
 Surface-collisions/particle/step: 0.00118074
-Surf-reactions/particle/step: 5.41223e-06
+Surface-reactions/particle/step: 5.41223e-06
 Collision-attempts/particle/step: 0.0587999
 Collisions/particle/step: 0.00563797
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -1152,27 +1294,33 @@ Surface reaction tallies:
 
 Particles: 7846.42 ave 8201 max 7513 min
 Histogram: 1 3 1 4 2 7 2 1 1 2
-Cells:      1202.88 ave 1651 max 906 min
+Cells:     1202.88 ave 1651 max 906 min
 Histogram: 4 3 2 3 6 1 0 2 2 1
 GhostCell: 27666.1 ave 27963 max 27218 min
 Histogram: 1 2 2 0 1 6 3 2 3 4
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   28773 288 1303 = cells outside/inside/overlapping surfs
   1226 77 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278473 0.000920528553278472 = cell-wise and global flow volume
   547 cells refined, 0 cells coarsened
   adapted to 30364 child grid cells, 9989 parent cells
   CPU time = 0.0469182 secs
   adapt/redo percent = 9.98731 90.0127
+balance_grid rcb part
 Balance grid migrated 1235 cells
   CPU time = 0.0114764 secs
   reassign/sort/migrate/ghost percent = 6.36959 0.91715 2.93367 89.7796
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 5.5396 5.5396 5.5396
@@ -1223,7 +1371,7 @@ SurfColl occurs   = 4597471 (4.6M)
 Surf reactions    = 20007 (20K)
 Collide attempts  = 238963723 (239M)
 Collide occurs    = 22964638 (23M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.42746e+07
@@ -1235,10 +1383,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 2.74534e-06
 Surface-checks/particle/step: 0.0448996
 Surface-collisions/particle/step: 0.00119083
-Surf-reactions/particle/step: 5.18218e-06
+Surface-reactions/particle/step: 5.18218e-06
 Collision-attempts/particle/step: 0.061896
 Collisions/particle/step: 0.00594826
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -1247,27 +1395,33 @@ Surface reaction tallies:
 
 Particles: 8237.83 ave 8820 max 7899 min
 Histogram: 2 2 8 4 1 5 0 1 0 1
-Cells:      1271.58 ave 1698 max 934 min
+Cells:     1271.58 ave 1698 max 934 min
 Histogram: 4 1 1 5 4 3 1 1 3 1
 GhostCell: 29246.4 ave 29584 max 28820 min
 Histogram: 1 3 1 1 3 4 5 1 1 4
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   30465 313 1335 = cells outside/inside/overlapping surfs
   1256 79 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278472 0.000920528553278472 = cell-wise and global flow volume
   583 cells refined, 0 cells coarsened
   adapted to 32113 child grid cells, 10572 parent cells
   CPU time = 0.0531767 secs
   adapt/redo percent = 9.87407 90.1259
+balance_grid rcb part
 Balance grid migrated 1368 cells
   CPU time = 0.0126803 secs
   reassign/sort/migrate/ghost percent = 6.31595 0.891307 2.93556 89.8572
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 5.58853 5.58853 5.58853
@@ -1318,7 +1472,7 @@ SurfColl occurs   = 4847163 (4.85M)
 Surf reactions    = 19932 (19.9K)
 Collide attempts  = 261565232 (262M)
 Collide occurs    = 25162485 (25.2M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.33666e+07
@@ -1330,10 +1484,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 2.87296e-06
 Surface-checks/particle/step: 0.0436933
 Surface-collisions/particle/step: 0.00119915
-Surf-reactions/particle/step: 4.93101e-06
+Surface-reactions/particle/step: 4.93101e-06
 Collision-attempts/particle/step: 0.064709
 Collisions/particle/step: 0.00622499
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -1342,27 +1496,33 @@ Surface reaction tallies:
 
 Particles: 8590.12 ave 8762 max 8334 min
 Histogram: 2 1 0 3 2 4 2 3 2 5
-Cells:      1344.62 ave 1727 max 1007 min
+Cells:     1344.62 ave 1727 max 1007 min
 Histogram: 4 1 2 3 4 1 2 3 1 3
 GhostCell: 30926.4 ave 31264 max 30544 min
 Histogram: 3 1 3 2 1 4 3 2 0 5
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   32121 341 1370 = cells outside/inside/overlapping surfs
   1289 81 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.00092052855327847 0.000920528553278472 = cell-wise and global flow volume
   573 cells refined, 0 cells coarsened
   adapted to 33832 child grid cells, 11145 parent cells
   CPU time = 0.0580831 secs
   adapt/redo percent = 9.57344 90.4266
+balance_grid rcb part
 Balance grid migrated 947 cells
   CPU time = 0.0134422 secs
   reassign/sort/migrate/ghost percent = 5.8551 0.963535 2.50213 90.6792
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 6.57412 6.57412 6.57412
@@ -1413,7 +1573,7 @@ SurfColl occurs   = 5065288 (5.07M)
 Surf reactions    = 19906 (19.9K)
 Collide attempts  = 283356761 (283M)
 Collide occurs    = 27264827 (27.3M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.29526e+07
@@ -1425,10 +1585,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 2.87115e-06
 Surface-checks/particle/step: 0.0425765
 Surface-collisions/particle/step: 0.00120461
-Surf-reactions/particle/step: 4.73397e-06
+Surface-reactions/particle/step: 4.73397e-06
 Collision-attempts/particle/step: 0.0673868
 Collisions/particle/step: 0.00648402
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -1437,27 +1597,33 @@ Surface reaction tallies:
 
 Particles: 8924.33 ave 9478 max 8574 min
 Histogram: 2 4 3 3 5 5 1 0 0 1
-Cells:      1416.42 ave 1803 max 1078 min
+Cells:     1416.42 ave 1803 max 1078 min
 Histogram: 4 1 3 3 0 3 4 3 2 1
 GhostCell: 32577.6 ave 32916 max 32191 min
 Histogram: 1 2 3 4 3 0 3 3 1 4
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   34006 369 1404 = cells outside/inside/overlapping surfs
   1320 84 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.00092052855327847 0.000920528553278472 = cell-wise and global flow volume
   649 cells refined, 0 cells coarsened
   adapted to 35779 child grid cells, 11794 parent cells
   CPU time = 0.0580813 secs
   adapt/redo percent = 10.0444 89.9556
+balance_grid rcb part
 Balance grid migrated 1857 cells
   CPU time = 0.0141691 secs
   reassign/sort/migrate/ghost percent = 5.65101 0.877464 2.82816 90.6434
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 6.62859 6.62859 6.62859
@@ -1508,7 +1674,7 @@ SurfColl occurs   = 5275060 (5.28M)
 Surf reactions    = 19981 (20K)
 Collide attempts  = 304190102 (304M)
 Collide occurs    = 29301968 (29.3M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.26241e+07
@@ -1520,10 +1686,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 2.97543e-06
 Surface-checks/particle/step: 0.0413231
 Surface-collisions/particle/step: 0.00121126
-Surf-reactions/particle/step: 4.58805e-06
+Surface-reactions/particle/step: 4.58805e-06
 Collision-attempts/particle/step: 0.0698484
 Collisions/particle/step: 0.00672834
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -1532,27 +1698,33 @@ Surface reaction tallies:
 
 Particles: 9218.54 ave 9536 max 8923 min
 Histogram: 2 1 1 4 3 7 2 2 1 1
-Cells:      1497.79 ave 1902 max 1120 min
+Cells:     1497.79 ave 1902 max 1120 min
 Histogram: 3 4 2 2 1 2 1 4 3 2
 GhostCell: 34449.2 ave 34827 max 34045 min
 Histogram: 2 3 4 1 2 1 2 2 4 3
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   35730 393 1432 = cells outside/inside/overlapping surfs
   1348 84 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278471 0.000920528553278472 = cell-wise and global flow volume
   592 cells refined, 0 cells coarsened
   adapted to 37555 child grid cells, 12386 parent cells
   CPU time = 0.0616285 secs
   adapt/redo percent = 9.63823 90.3618
+balance_grid rcb part
 Balance grid migrated 719 cells
   CPU time = 0.0146898 secs
   reassign/sort/migrate/ghost percent = 5.59114 0.898113 2.08322 91.4275
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 6.67827 6.67827 6.67827
@@ -1603,7 +1775,7 @@ SurfColl occurs   = 5470247 (5.47M)
 Surf reactions    = 19925 (19.9K)
 Collide attempts  = 324339717 (324M)
 Collide occurs    = 31254795 (31.3M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.23316e+07
@@ -1615,10 +1787,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 2.95804e-06
 Surface-checks/particle/step: 0.0409384
 Surface-collisions/particle/step: 0.00121672
-Surf-reactions/particle/step: 4.43183e-06
+Surface-reactions/particle/step: 4.43183e-06
 Collision-attempts/particle/step: 0.0721414
 Collisions/particle/step: 0.00695186
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -1627,27 +1799,33 @@ Surface reaction tallies:
 
 Particles: 9500.88 ave 9838 max 8960 min
 Histogram: 1 0 1 2 3 5 3 3 4 2
-Cells:      1571.79 ave 2071 max 1184 min
+Cells:     1571.79 ave 2071 max 1184 min
 Histogram: 3 5 0 4 1 2 5 1 2 1
 GhostCell: 36151.2 ave 36539 max 35652 min
 Histogram: 1 2 1 5 2 1 4 0 5 3
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   37413 421 1470 = cells outside/inside/overlapping surfs
   1383 87 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.00092052855327847 0.000920528553278472 = cell-wise and global flow volume
   583 cells refined, 0 cells coarsened
   adapted to 39304 child grid cells, 12969 parent cells
   CPU time = 0.0679301 secs
   adapt/redo percent = 10.0388 89.9612
+balance_grid rcb part
 Balance grid migrated 1390 cells
   CPU time = 0.0200117 secs
   reassign/sort/migrate/ghost percent = 4.30037 0.707512 1.888 93.1041
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 6.7272 6.7272 6.7272
@@ -1698,7 +1876,7 @@ SurfColl occurs   = 5652946 (5.65M)
 Surf reactions    = 19940 (19.9K)
 Collide attempts  = 342770692 (343M)
 Collide occurs    = 33063070 (33.1M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.2127e+07
@@ -1710,10 +1888,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 3.01704e-06
 Surface-checks/particle/step: 0.0395334
 Surface-collisions/particle/step: 0.00122277
-Surf-reactions/particle/step: 4.31315e-06
+Surface-reactions/particle/step: 4.31315e-06
 Collision-attempts/particle/step: 0.0741435
 Collisions/particle/step: 0.00715175
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -1722,27 +1900,33 @@ Surface reaction tallies:
 
 Particles: 9755.54 ave 10316 max 9457 min
 Histogram: 3 4 4 3 3 5 0 1 0 1
-Cells:      1644.92 ave 2217 max 1268 min
+Cells:     1644.92 ave 2217 max 1268 min
 Histogram: 4 3 3 2 3 4 2 0 2 1
 GhostCell: 37833.1 ave 38210 max 37261 min
 Histogram: 1 2 0 2 4 3 2 3 3 4
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   39208 435 1482 = cells outside/inside/overlapping surfs
   1394 88 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278472 0.000920528553278472 = cell-wise and global flow volume
   607 cells refined, 0 cells coarsened
   adapted to 41125 child grid cells, 13576 parent cells
   CPU time = 0.0750555 secs
   adapt/redo percent = 9.05176 90.9482
+balance_grid rcb part
 Balance grid migrated 1459 cells
   CPU time = 0.0201357 secs
   reassign/sort/migrate/ghost percent = 5.136 0.769836 2.03363 92.0605
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 7.71564 7.71564 7.71564
@@ -1793,7 +1977,7 @@ SurfColl occurs   = 5816348 (5.82M)
 Surf reactions    = 19829 (19.8K)
 Collide attempts  = 360255312 (360M)
 Collide occurs    = 34762163 (34.8M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.23919e+07
@@ -1805,10 +1989,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 3.06486e-06
 Surface-checks/particle/step: 0.0395792
 Surface-collisions/particle/step: 0.00122745
-Surf-reactions/particle/step: 4.18461e-06
+Surface-reactions/particle/step: 4.18461e-06
 Collision-attempts/particle/step: 0.0760265
 Collisions/particle/step: 0.00733603
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -1817,27 +2001,33 @@ Surface reaction tallies:
 
 Particles: 9990.88 ave 10420 max 9629 min
 Histogram: 1 2 4 2 6 4 2 1 1 1
-Cells:      1720.88 ave 2245 max 1291 min
+Cells:     1720.88 ave 2245 max 1291 min
 Histogram: 2 3 3 4 1 3 4 1 1 2
 GhostCell: 39580.1 ave 40010 max 39056 min
 Histogram: 2 1 1 4 3 1 4 3 3 2
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   40932 461 1505 = cells outside/inside/overlapping surfs
   1416 89 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278473 0.000920528553278472 = cell-wise and global flow volume
   591 cells refined, 0 cells coarsened
   adapted to 42898 child grid cells, 14167 parent cells
   CPU time = 0.0764722 secs
   adapt/redo percent = 9.7454 90.2546
+balance_grid rcb part
 Balance grid migrated 1391 cells
   CPU time = 0.0199417 secs
   reassign/sort/migrate/ghost percent = 4.81548 1.26924 2.34182 91.5735
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 7.76524 7.76524 7.76524
@@ -1888,7 +2078,7 @@ SurfColl occurs   = 5973654 (5.97M)
 Surf reactions    = 20022 (20K)
 Collide attempts  = 376528709 (377M)
 Collide occurs    = 36369794 (36.4M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.19624e+07
@@ -1900,10 +2090,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 3.10693e-06
 Surface-checks/particle/step: 0.0393217
 Surface-collisions/particle/step: 0.00123296
-Surf-reactions/particle/step: 4.13253e-06
+Surface-reactions/particle/step: 4.13253e-06
 Collision-attempts/particle/step: 0.0777153
 Collisions/particle/step: 0.0075067
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -1912,27 +2102,33 @@ Surface reaction tallies:
 
 Particles: 10196.1 ave 10530 max 9922 min
 Histogram: 2 2 4 3 4 0 4 3 1 1
-Cells:      1794.83 ave 2308 max 1338 min
+Cells:     1794.83 ave 2308 max 1338 min
 Histogram: 3 1 3 4 2 1 6 1 0 3
 GhostCell: 41281.2 ave 41738 max 40768 min
 Histogram: 3 0 1 6 1 2 4 3 1 3
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   42514 493 1529 = cells outside/inside/overlapping surfs
   1440 89 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278474 0.000920528553278472 = cell-wise and global flow volume
   546 cells refined, 0 cells coarsened
   adapted to 44536 child grid cells, 14713 parent cells
   CPU time = 0.0818148 secs
   adapt/redo percent = 9.52495 90.475
+balance_grid rcb part
 Balance grid migrated 1354 cells
   CPU time = 0.0213395 secs
   reassign/sort/migrate/ghost percent = 4.46156 0.758927 1.96792 92.8116
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 7.81106 7.81106 7.81106
@@ -1983,7 +2179,7 @@ SurfColl occurs   = 6098839 (6.1M)
 Surf reactions    = 19991 (20K)
 Collide attempts  = 390813184 (391M)
 Collide occurs    = 37736800 (37.7M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.22621e+07
@@ -1995,10 +2191,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 3.17526e-06
 Surface-checks/particle/step: 0.0390602
 Surface-collisions/particle/step: 0.00123543
-Surf-reactions/particle/step: 4.04954e-06
+Surface-reactions/particle/step: 4.04954e-06
 Collision-attempts/particle/step: 0.0791664
 Collisions/particle/step: 0.00764428
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -2007,27 +2203,33 @@ Surface reaction tallies:
 
 Particles: 10376.7 ave 10661 max 10050 min
 Histogram: 2 2 1 2 5 1 4 2 2 3
-Cells:      1863.08 ave 2390 max 1377 min
+Cells:     1863.08 ave 2390 max 1377 min
 Histogram: 2 2 3 4 2 1 6 1 0 3
 GhostCell: 42850.9 ave 43337 max 42324 min
 Histogram: 3 0 1 6 1 2 4 3 2 2
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   44027 497 1539 = cells outside/inside/overlapping surfs
   1450 89 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278474 0.000920528553278472 = cell-wise and global flow volume
   509 cells refined, 0 cells coarsened
   adapted to 46063 child grid cells, 15222 parent cells
   CPU time = 0.0841893 secs
   adapt/redo percent = 9.99898 90.001
+balance_grid rcb part
 Balance grid migrated 948 cells
   CPU time = 0.0223399 secs
   reassign/sort/migrate/ghost percent = 4.27224 0.690318 1.76035 93.2771
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 7.85378 7.85378 7.85378
@@ -2078,7 +2280,7 @@ SurfColl occurs   = 6213941 (6.21M)
 Surf reactions    = 19950 (19.9K)
 Collide attempts  = 405008336 (405M)
 Collide occurs    = 39104841 (39.1M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.21588e+07
@@ -2090,10 +2292,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 3.17455e-06
 Surface-checks/particle/step: 0.0387707
 Surface-collisions/particle/step: 0.00123669
-Surf-reactions/particle/step: 3.97043e-06
+Surface-reactions/particle/step: 3.97043e-06
 Collision-attempts/particle/step: 0.0806044
 Collisions/particle/step: 0.00778261
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -2102,27 +2304,33 @@ Surface reaction tallies:
 
 Particles: 10547.5 ave 10792 max 10183 min
 Histogram: 1 1 1 3 3 3 1 4 3 4
-Cells:      1926.71 ave 2441 max 1410 min
+Cells:     1926.71 ave 2441 max 1410 min
 Histogram: 3 1 2 2 4 2 5 1 2 2
 GhostCell: 44314.3 ave 44831 max 43800 min
 Histogram: 2 2 1 5 2 4 2 2 1 3
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   45553 508 1556 = cells outside/inside/overlapping surfs
   1467 89 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278474 0.000920528553278472 = cell-wise and global flow volume
   518 cells refined, 0 cells coarsened
   adapted to 47617 child grid cells, 15740 parent cells
   CPU time = 0.09226 secs
   adapt/redo percent = 9.80395 90.1961
+balance_grid rcb part
 Balance grid migrated 1283 cells
   CPU time = 0.0251446 secs
   reassign/sort/migrate/ghost percent = 3.83254 0.674557 1.69928 93.7936
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 7.89725 7.89725 7.89725
@@ -2173,7 +2381,7 @@ SurfColl occurs   = 6321838 (6.32M)
 Surf reactions    = 20000 (20K)
 Collide attempts  = 416712973 (417M)
 Collide occurs    = 40260331 (40.3M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.20571e+07
@@ -2185,10 +2393,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 3.27208e-06
 Surface-checks/particle/step: 0.0386646
 Surface-collisions/particle/step: 0.00124051
-Surf-reactions/particle/step: 3.92453e-06
+Surface-reactions/particle/step: 3.92453e-06
 Collision-attempts/particle/step: 0.0817701
 Collisions/particle/step: 0.00790014
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -2197,27 +2405,33 @@ Surface reaction tallies:
 
 Particles: 10686 ave 10950 max 10371 min
 Histogram: 1 3 0 2 4 5 2 3 2 2
-Cells:      1991.46 ave 2526 max 1428 min
+Cells:     1991.46 ave 2526 max 1428 min
 Histogram: 2 2 2 2 2 3 5 2 2 2
 GhostCell: 45803.5 ave 46367 max 45269 min
 Histogram: 2 2 2 5 3 2 2 2 2 2
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   46956 517 1563 = cells outside/inside/overlapping surfs
   1473 90 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278472 0.000920528553278472 = cell-wise and global flow volume
   473 cells refined, 0 cells coarsened
   adapted to 49036 child grid cells, 16213 parent cells
   CPU time = 0.0929778 secs
   adapt/redo percent = 10.0011 89.9989
+balance_grid rcb part
 Balance grid migrated 769 cells
   CPU time = 0.0262945 secs
   reassign/sort/migrate/ghost percent = 3.78214 0.678245 1.45898 94.0806
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 8.87444 8.87444 8.87444
@@ -2268,7 +2482,7 @@ SurfColl occurs   = 6412819 (6.41M)
 Surf reactions    = 19904 (19.9K)
 Collide attempts  = 429002580 (429M)
 Collide occurs    = 41446487 (41.4M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.20836e+07
@@ -2280,10 +2494,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 3.19613e-06
 Surface-checks/particle/step: 0.0382322
 Surface-collisions/particle/step: 0.00124144
-Surf-reactions/particle/step: 3.85317e-06
+Surface-reactions/particle/step: 3.85317e-06
 Collision-attempts/particle/step: 0.0830497
 Collisions/particle/step: 0.00802353
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -2292,27 +2506,33 @@ Surface reaction tallies:
 
 Particles: 10835.4 ave 11201 max 10380 min
 Histogram: 1 2 1 1 6 1 6 2 2 2
-Cells:      2050.67 ave 2656 max 1481 min
+Cells:     2050.67 ave 2656 max 1481 min
 Histogram: 2 3 2 1 3 5 2 3 2 1
 GhostCell: 47165.3 ave 47735 max 46560 min
 Histogram: 1 2 3 2 5 3 1 2 3 2
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   48271 525 1572 = cells outside/inside/overlapping surfs
   1482 90 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278472 0.000920528553278472 = cell-wise and global flow volume
   444 cells refined, 0 cells coarsened
   adapted to 50368 child grid cells, 16657 parent cells
   CPU time = 0.0967048 secs
   adapt/redo percent = 11.117 88.883
+balance_grid rcb part
 Balance grid migrated 1098 cells
   CPU time = 0.0275215 secs
   reassign/sort/migrate/ghost percent = 3.80692 0.675679 1.74861 93.7688
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 8.91171 8.91171 8.91171
@@ -2363,7 +2583,7 @@ SurfColl occurs   = 6516215 (6.52M)
 Surf reactions    = 20006 (20K)
 Collide attempts  = 440338596 (440M)
 Collide occurs    = 42568344 (42.6M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.2122e+07
@@ -2375,10 +2595,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 3.23416e-06
 Surface-checks/particle/step: 0.0380322
 Surface-collisions/particle/step: 0.00124524
-Surf-reactions/particle/step: 3.82313e-06
+Surface-reactions/particle/step: 3.82313e-06
 Collision-attempts/particle/step: 0.0841484
 Collisions/particle/step: 0.00813478
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -2387,27 +2607,33 @@ Surface reaction tallies:
 
 Particles: 10963.3 ave 11352 max 10476 min
 Histogram: 1 1 1 3 3 3 5 3 3 1
-Cells:      2106.17 ave 2740 max 1553 min
+Cells:     2106.17 ave 2740 max 1553 min
 Histogram: 3 2 2 2 2 6 3 2 1 1
 GhostCell: 48441.8 ave 48995 max 47808 min
 Histogram: 1 1 2 3 6 2 2 2 2 3
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   49606 535 1583 = cells outside/inside/overlapping surfs
   1493 90 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278471 0.000920528553278472 = cell-wise and global flow volume
   452 cells refined, 0 cells coarsened
   adapted to 51724 child grid cells, 17109 parent cells
   CPU time = 0.0991474 secs
   adapt/redo percent = 10.2183 89.7817
+balance_grid rcb part
 Balance grid migrated 1355 cells
   CPU time = 0.029114 secs
   reassign/sort/migrate/ghost percent = 3.56504 0.609778 1.65127 94.1739
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 8.94964 8.94964 8.94964
@@ -2458,7 +2684,7 @@ SurfColl occurs   = 6602274 (6.6M)
 Surf reactions    = 20012 (20K)
 Collide attempts  = 449750121 (450M)
 Collide occurs    = 43466119 (43.5M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.20224e+07
@@ -2470,10 +2696,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 3.22936e-06
 Surface-checks/particle/step: 0.0380482
 Surface-collisions/particle/step: 0.0012475
-Surf-reactions/particle/step: 3.78128e-06
+Surface-reactions/particle/step: 3.78128e-06
 Collision-attempts/particle/step: 0.0849806
 Collisions/particle/step: 0.00821295
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -2482,27 +2708,33 @@ Surface reaction tallies:
 
 Particles: 11084 ave 11521 max 10825 min
 Histogram: 3 2 5 4 5 2 1 0 1 1
-Cells:      2162.67 ave 2790 max 1575 min
+Cells:     2162.67 ave 2790 max 1575 min
 Histogram: 3 2 2 2 1 4 5 2 2 1
 GhostCell: 49741.3 ave 50329 max 49114 min
 Histogram: 1 2 2 5 4 1 2 2 2 3
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   50792 539 1599 = cells outside/inside/overlapping surfs
   1509 90 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278472 0.000920528553278472 = cell-wise and global flow volume
   402 cells refined, 0 cells coarsened
   adapted to 52930 child grid cells, 17511 parent cells
   CPU time = 0.103069 secs
   adapt/redo percent = 10.4562 89.5438
+balance_grid rcb part
 Balance grid migrated 819 cells
   CPU time = 0.0304793 secs
   reassign/sort/migrate/ghost percent = 3.62047 0.640848 1.48166 94.257
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 8.98338 8.98338 8.98338
@@ -2553,7 +2785,7 @@ SurfColl occurs   = 6681080 (6.68M)
 Surf reactions    = 19889 (19.9K)
 Collide attempts  = 459758309 (460M)
 Collide occurs    = 44447097 (44.4M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.20141e+07
@@ -2565,10 +2797,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 3.23714e-06
 Surface-checks/particle/step: 0.0375941
 Surface-collisions/particle/step: 0.00124907
-Surf-reactions/particle/step: 3.71837e-06
+Surface-reactions/particle/step: 3.71837e-06
 Collision-attempts/particle/step: 0.0859546
 Collisions/particle/step: 0.00830965
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -2577,27 +2809,33 @@ Surface reaction tallies:
 
 Particles: 11200.5 ave 11713 max 10808 min
 Histogram: 1 1 4 7 3 4 2 0 0 2
-Cells:      2212.92 ave 2803 max 1647 min
+Cells:     2212.92 ave 2803 max 1647 min
 Histogram: 4 1 2 1 2 4 5 2 1 2
 GhostCell: 50897.1 ave 51463 max 50307 min
 Histogram: 2 1 2 5 4 2 1 2 1 4
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   51904 547 1613 = cells outside/inside/overlapping surfs
   1523 90 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278473 0.000920528553278472 = cell-wise and global flow volume
   378 cells refined, 0 cells coarsened
   adapted to 54064 child grid cells, 17889 parent cells
   CPU time = 0.105256 secs
   adapt/redo percent = 10.2673 89.7327
+balance_grid rcb part
 Balance grid migrated 950 cells
   CPU time = 0.0307569 secs
   reassign/sort/migrate/ghost percent = 3.78512 0.587309 1.48294 94.1446
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 9.0151 9.0151 9.0151
@@ -2648,7 +2886,7 @@ SurfColl occurs   = 6759091 (6.76M)
 Surf reactions    = 19998 (20K)
 Collide attempts  = 468269251 (468M)
 Collide occurs    = 45303813 (45.3M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.18906e+07
@@ -2660,10 +2898,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 3.29221e-06
 Surface-checks/particle/step: 0.0374241
 Surface-collisions/particle/step: 0.00125231
-Surf-reactions/particle/step: 3.7052e-06
+Surface-reactions/particle/step: 3.7052e-06
 Collision-attempts/particle/step: 0.0867602
 Collisions/particle/step: 0.00839382
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -2672,27 +2910,33 @@ Surface reaction tallies:
 
 Particles: 11293.6 ave 11650 max 11048 min
 Histogram: 4 2 3 4 3 3 1 0 2 2
-Cells:      2260.17 ave 2830 max 1628 min
+Cells:     2260.17 ave 2830 max 1628 min
 Histogram: 3 2 0 3 2 4 3 3 1 3
 GhostCell: 51983.8 ave 52616 max 51414 min
 Histogram: 3 1 3 3 4 2 3 0 2 3
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
 Adapting grid ...
   52893 547 1626 = cells outside/inside/overlapping surfs
   1536 90 = surf cells with 1,2,etc splits
-  0.000920529 0.000920529 = cell-wise and global flow volume
+  0.000920528553278472 0.000920528553278472 = cell-wise and global flow volume
   334 cells refined, 0 cells coarsened
   adapted to 55066 child grid cells, 18223 parent cells
   CPU time = 0.108163 secs
   adapt/redo percent = 10.425 89.575
+balance_grid rcb part
 Balance grid migrated 1089 cells
   CPU time = 0.0317761 secs
   reassign/sort/migrate/ghost percent = 3.31384 0.524825 1.54505 94.6163
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 1.6875 1.6875 1.6875
   grid      (ave,min,max) = 9.04313 9.04313 9.04313
@@ -2743,7 +2987,7 @@ SurfColl occurs   = 6817422 (6.82M)
 Surf reactions    = 20101 (20.1K)
 Collide attempts  = 475912809 (476M)
 Collide occurs    = 46029735 (46M)
-Reactions         = 0 (0K)
+Gas reactions     = 0 (0K)
 Particles stuck   = 0
 
 Particle-moves/CPUsec/proc: 1.17517e+07
@@ -2755,10 +2999,10 @@ Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 3.32562e-06
 Surface-checks/particle/step: 0.0372003
 Surface-collisions/particle/step: 0.00125309
-Surf-reactions/particle/step: 3.6947e-06
+Surface-reactions/particle/step: 3.6947e-06
 Collision-attempts/particle/step: 0.087476
 Collisions/particle/step: 0.00846058
-Reactions/particle/step: 0
+Gas-reactions/particle/step: 0
 
 Surface reaction tallies:
   id stick style prob #-of-reactions 1
@@ -2767,13 +3011,46 @@ Surface reaction tallies:
 
 Particles: 11368.8 ave 11781 max 11011 min
 Histogram: 1 1 4 3 5 3 4 2 0 1
-Cells:      2301.92 ave 2915 max 1672 min
+Cells:     2301.92 ave 2915 max 1672 min
 Histogram: 3 2 0 3 2 5 3 2 1 3
 GhostCell: 52944.1 ave 53574 max 52331 min
 Histogram: 3 1 2 3 5 2 3 0 2 3
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
-Surfs:    90 ave 90 max 90 min
+Surfs:     90 ave 90 max 90 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
 GhostSurf: 0 ave 0 max 0 min
 Histogram: 24 0 0 0 0 0 0 0 0 0
+adapt_grid all refine particle 16 4
+Adapting grid ...
+  53894 555 1640 = cells outside/inside/overlapping surfs
+  1550 90 = surf cells with 1,2,etc splits
+  0.000920528553278472 0.000920528553278472 = cell-wise and global flow volume
+  341 cells refined, 0 cells coarsened
+  adapted to 56089 child grid cells, 18564 parent cells
+  CPU time = 0.113058 secs
+  adapt/redo percent = 10.8164 89.1836
+balance_grid rcb part
+Balance grid migrated 1341 cells
+  CPU time = 0.0322563 secs
+  reassign/sort/migrate/ghost percent = 3.31992 0.521442 1.45831 94.7003
+next a
+jump in.cell loop
+variable a loop 50
+run 		    20000
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1.6875 1.6875 1.6875
+  grid      (ave,min,max) = 9.07175 9.07175 9.07175
+  surf      (ave,min,max) = 0.00926971 0.00926971 0.00926971
+  total     (ave,min,max) = 10.7685 10.7685 10.7685
+WALL Step CPU Np Natt Ncoll Nscoll Nscheck 
+   364.64962   580000            0   272852    23896     2315        0        0 
+   365.62185   581000   0.97218426   272951    24188     2327      316     9786 
+   366.59289   582000    1.9432266   273085    23838     2276      335     9902 
+   367.56388   583000    2.9142122   273225    24086     2332      327     9899 
+   368.53234   584000    3.8826701   273361    23919     2301      364    10152 
+    369.5016   585000    4.8519288   273415    24172     2408      315    10061 
+   370.46592   586000    5.8162543   273555    24203     2290      317     9884 
+   371.44207   587000    6.7924009   273670    24250     2319      353    10331 
+ERROR on proc 11: Particle 4847 on proc 11 being sent to self on step 587622 (../update.cpp:1167)
+firefox not found
