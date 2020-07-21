@@ -4,7 +4,7 @@ include("DrawCell.jl")
 
 const SCCM = 4.41941E17 # particles per second
 
-function runsim(lgap, lstage, T1, T2, pflip)
+function runsim(lgap, lstage, T1, T2, pflip, whichinlet)
     # Methanol
     methanol_flow = 0.08 # sccm
     methanol_T = 250 # K 
@@ -32,7 +32,7 @@ function runsim(lgap, lstage, T1, T2, pflip)
     # Paths
     PROG_PATH = pwd()
     TEMPLATE_PATH = "./template"
-    RUN_PATH = @sprintf("./flow_%.5f_gap_%.5f_len_%.5f_T1_%.5f_T2_%.5f_methanol_%.5f_T_%.5f", flow, gap/(1000mm), lstage, T1, T2, methanol_flow, methanol_T)
+    RUN_PATH = @sprintf("./flow_%.5f_gap_%.5f_len_%.5f_T1_%.5f_T2_%.5f_methanol_%.5f_T_%.5f_inlet_%s", flow, gap/(1000mm), lstage, T1, T2, methanol_flow, methanol_T, whichinlet < 1 ? "axial" : "side")
     SPARTA_CMD = `mpirun /n/home03/calmiller/programs/sparta/spa -kokkos off`
     # SPARTA_CMD = `/usr/local/bin/spa_kokkos_omp`
 
@@ -54,6 +54,10 @@ function runsim(lgap, lstage, T1, T2, pflip)
         Point(3.18, 12.7),
         Point(10.27, 12.7),
         Point(10.27, 21.59),
+        Point(19.81, 21.59),
+        Point(18.99, 24.12),
+        Point(20.5, 24.61),
+        Point(21.48, 21.59),
         Point(56.52, 21.59),
         Point(56.52, 3.5),
         Point(58.1, 3.5),
@@ -62,11 +66,13 @@ function runsim(lgap, lstage, T1, T2, pflip)
         Point(0, 0)
     ], max_len)
 
+    # TODO: Add new points as inlet
+
     # Diffuser
     diffuser = divide_polygon(1mm*[
         Point(7.14, 0),
-        Point(7.14, 1.59),
-        Point(9.53, 1.59),
+        Point(7.14, 0.79),
+        Point(9.53, 0.79),
         Point(9.53, 9.53),
         Point(6.35, 9.53),
         Point(6.35, 0)
@@ -79,7 +85,7 @@ function runsim(lgap, lstage, T1, T2, pflip)
 
     polygons = [first, diffuser, stage, mesh...]
     He_inlet = 1
-    methanol_inlet = length(first) + 1
+    methanol_inlet = whichinlet < 1 ? length(first) + 1 : findfirst(isequal(Point(18.99, 24.12)*1mm),first)
 
     # Draw and save cell image
     sethue("black")
@@ -157,8 +163,8 @@ function runsim(lgap, lstage, T1, T2, pflip)
 
         group       hot surf id %d:%d
 
-        fix		    in emit/surf He inlet n \${NPERSTEP} perspecies no
-        fix         in2 emit/surf methanol methanolinlet n \${METHANOLPERSTEP} perspecies no nevery \${METHANOLPERSTEP}
+        fix		    in emit/surf He inlet n \${NPERSTEP} perspecies no normal yes
+        fix         in2 emit/surf methanol methanolinlet n \${METHANOLPERSTEP} perspecies no nevery \${METHANOLPERSTEP} normal yes
         
         surf_collide	    diffuse diffuse \${T1} 1.0
         surf_collide	    cold diffuse \${T2} 1.0
@@ -210,7 +216,7 @@ function runsim(lgap, lstage, T1, T2, pflip)
         
         next b
         jump in.cell loop2
-        write_restart data/restart.slurm""", fnum, zmax, rmax, timestep, nperstep, methanolnperstep, methanolnevery, T1, T2, methanol_T, lfirst + 0.0005, he, he, methanol_inlet, methanol_inlet, methanol_inlet+2))
+        write_restart data/restart.slurm""", fnum, zmax, rmax, timestep, nperstep, methanolnperstep, methanolnevery, T1, T2, methanol_T, lfirst + 0.0005, he, he, methanol_inlet, whichinlet < 1 ? methanol_inlet : methanol_inlet - 1, methanol_inlet+1))
     end
 
     cd(RUN_PATH)
@@ -247,10 +253,14 @@ function parse_commandline()
             help = "collision spin flip probability"
             arg_type = Float64
             default = 0.1
+        "--inlet"
+            help = "<1 if axial inlet, >1 if side"
+            arg_type = Float64
+            default = 0.1
     end
 
     return parse_args(s)
 end
 
 args = parse_commandline()
-runsim(args["l"], args["L"], args["T1"], args["T2"], args["pflip"])
+runsim(args["l"], args["L"], args["T1"], args["T2"], args["pflip"],  args["inlet"])
