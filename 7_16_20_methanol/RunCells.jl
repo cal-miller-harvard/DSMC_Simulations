@@ -199,9 +199,9 @@ function runsim(lgap, lstage, T1, T2, pflip)
         dump out2 grid all 100000 data/DS2FF.methanol.DAT xc yc f_methanolout[*]
         dump surfs surf all 100000 data/cell.surfs id v1x v1y v2x v2y f_collisions[*]
 
-        dump_modify out append no format float %.5f
-        dump_modify out2 append no format float %.5f
-        dump_modify surfs append no format float %.5f
+        dump_modify out append no format float %%.5f
+        dump_modify out2 append no format float %%.5f
+        dump_modify surfs append no format float %%.5f
         
         # Record statistics
         label loop2
