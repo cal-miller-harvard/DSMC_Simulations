@@ -17,4 +17,4 @@ export JULIA_NUM_THREADS=$SLURM_CPUS_ON_NODE
         
 echo "running...."
         
-julia RunCells3He.jl --T1 2.0000 --T2 2.0000 -l 0.0020 -L 0.0100
+julia RunCells.jl --T1 2.0000 --T2 2.0000 -l 0.0020 -L 0.0100
