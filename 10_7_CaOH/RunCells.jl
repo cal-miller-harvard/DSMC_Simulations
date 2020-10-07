@@ -49,7 +49,7 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh)
     if ismesh
         polygons = [stage, mesh...]
     else
-        polygons = stage
+        polygons = [stage]
     end
     
     # Draw and save cell image

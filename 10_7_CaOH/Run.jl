@@ -43,8 +43,7 @@ for mesh in meshs
             
                 echo "running...."
             
-                julia RunCells.jl --T1 %.4f --T2 %.4f -l %.4f -L %.4f --mesh
-                """, T1, T2, l, L, mesh))
+                julia RunCells.jl --T1 %.4f --T2 %.4f -l %.4f -L %.4f --mesh %d """, T1, T2, l, L, mesh))
             end
             run(`sbatch $fname`)
         end
