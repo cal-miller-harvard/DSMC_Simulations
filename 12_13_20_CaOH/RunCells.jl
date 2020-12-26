@@ -89,7 +89,6 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh)
         variable NPERSTEP equal "%.3E"
         variable T1 equal "%.3E"
         variable T2 equal "%.3E"
-        variable FNAME equal "%s"
         
         global		        fnum \${FNUM} cellmax 10000
         seed	    	    12345
@@ -108,7 +107,7 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh)
         create_grid 	    20 20 1 
         balance_grid        rcb cell
         
-        read_surf           \${FNAME}
+        read_surf          %s
         group       inlet surf id 1
         fix		    in emit/surf He inlet n \${NPERSTEP} perspecies no
 
@@ -149,7 +148,7 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh)
         
         next b
         jump in.cell loop2
-        write_restart data/restart.slurm""", fnum, zmax, rmax, timestep, nperstep, T1, T2, ismesh ? "data_hole.cell" : "data.cell", he, he))
+        write_restart data/restart.slurm""", fnum, zmax, rmax, timestep, nperstep, T1, T2, he, he, ismesh ? "data_hole.cell" : "data.cell"))
     end
 
     cd(RUN_PATH)
