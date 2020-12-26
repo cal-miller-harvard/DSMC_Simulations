@@ -20,8 +20,8 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh)
     facethickness = 0.6mm
 
     # Particle simulation parameters
-    n_particles = 1000000
-    omegas = [0.0]#, 539.0]#425.0, 425.0, 539.0, 539.0] # corresponding to 0, 1, 1.6 T at 0.5" radius
+    n_particles = 100000
+    omegas = [0.0]
     zmin = 65.09E-3
     zend = zmin+lstage+1E-3
     zmaxs = [zend]#, zend]#[1E2, zend, 1E2, zend, 1E2]
@@ -31,7 +31,7 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh)
     # Paths
     PROG_PATH = pwd()
     TEMPLATE_PATH = "./template"
-    RUN_PATH = @sprintf("./flow_%.5f_gap_%.5f_len_%.5f_T1_%.5f_T2_%.5f_%s", flow, gap/(1000mm), lstage, T1, T2, ismesh ? "mesh" : "nomesh")
+    RUN_PATH = @sprintf("./flow_%.5f_T_%.5f_%s", flow, T1, ismesh ? "hole" : "nohole")
     SPARTA_CMD = `mpirun /n/home03/calmiller/programs/sparta/spa -kokkos off`
 
     mkpath(RUN_PATH)
@@ -41,34 +41,34 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh)
     mkpath(RUN_PATH*"/data")
 
     # Define cell geometry
-    Drawing(round(Int32,zmax*1000mm), round(Int32,rmax*1000mm), RUN_PATH*"/cell.pdf")
+    # Drawing(round(Int32,zmax*1000mm), round(Int32,rmax*1000mm), RUN_PATH*"/cell.pdf")
 
-    stage = Point(gap, 0) + make_stage(stage_len, stage_id, stage_od, raperture, facethickness)
-    mesh = Point(BoundingBox(stage).corner2.x, 0.14mm) .+ make_mesh(:y, 4, 0.675mm, 0.675mm, 1.055mm)
+    # stage = Point(gap, 0) + make_stage(stage_len, stage_id, stage_od, raperture, facethickness)
+    # mesh = Point(BoundingBox(stage).corner2.x, 0.14mm) .+ make_mesh(:y, 4, 0.675mm, 0.675mm, 1.055mm)
 
-    if ismesh
-        polygons = [stage, mesh...]
-    else
-        polygons = [stage]
-    end
+    # if ismesh
+    #     polygons = [stage, mesh...]
+    # else
+    #     polygons = [stage]
+    # end
     
-    # Draw and save cell image
-    sethue("black")
-    setline(0.1mm)
-    for p in polygons
-        poly(p, :stroke, close=true)
-    end
-    finish()
+    # # Draw and save cell image
+    # sethue("black")
+    # setline(0.1mm)
+    # for p in polygons
+    #     poly(p, :stroke, close=true)
+    # end
+    # finish()
 
-    try
-        cmd = "firefox"
-        arg = RUN_PATH*"/cell.pdf"
-        run(`$cmd $arg`)
-    catch
-        println("firefox not found")
-    end
+    # try
+    #     cmd = "firefox"
+    #     arg = RUN_PATH*"/cell.pdf"
+    #     run(`$cmd $arg`)
+    # catch
+    #     println("firefox not found")
+    # end
 
-    toSPARTA(polygons, RUN_PATH*"/data.stages")
+    # toSPARTA(polygons, RUN_PATH*"/data.stages")
 
     if T1 > 1.9 && T2 > 1.9
         he = "he4"
@@ -89,6 +89,7 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh)
         variable NPERSTEP equal "%.3E"
         variable T1 equal "%.3E"
         variable T2 equal "%.3E"
+        variable FNAME equal "%s"
         
         global		        fnum \${FNUM} cellmax 10000
         seed	    	    12345
@@ -107,11 +108,11 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh)
         create_grid 	    20 20 1 
         balance_grid        rcb cell
         
-        read_surf           data.cell
+        read_surf           \${FNAME}
         group       inlet surf id 1
         fix		    in emit/surf He inlet n \${NPERSTEP} perspecies no
 
-        read_surf           data.diffuser
+        # read_surf           data.diffuser
         
         # read_surf           data.stages trans 65.09E-3 0 0 group stages
         
@@ -148,7 +149,7 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh)
         
         next b
         jump in.cell loop2
-        write_restart data/restart.slurm""", fnum, zmax, rmax, timestep, nperstep, T1, T2, he, he))
+        write_restart data/restart.slurm""", fnum, zmax, rmax, timestep, nperstep, T1, T2, ismesh ? "data_hole.cell" : "data.cell", he, he))
     end
 
     cd(RUN_PATH)
@@ -165,7 +166,7 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh)
             fname = @sprintf("run_omega_%.5f_M_%.1f.cell",omega, M)
             open(fname, "w") do f
                 write(f,@sprintf("""#!/bin/bash
-                #SBATCH -n 16 # Number of cores requested
+                #SBATCH -n 8 # Number of cores requested
                 #SBATCH -N 1 # Ensure that all cores are on one machine
                 #SBATCH -t 0-08:00 # Runtime in minutes
                 #SBATCH -p shared # Partition to submit to
