@@ -1,15 +1,15 @@
 using Printf
 
 T = 2.0
-holes = [false], true
+holes = [false,true]
 
 mkpath("logs")
 
-for hole in holes
-    if hole
-        fname = @sprintf("run_T_%.4f_hole.slurm", T1)
+for h in holes
+    if h
+        fname = @sprintf("run_T_%.4f_hole.slurm", T)
     else
-        fname = @sprintf("run_T_%.4f_no_hole.slurm", T1)
+        fname = @sprintf("run_T_%.4f_no_hole.slurm", T)
     end
     open(fname, "w") do f
         write(f,@sprintf("""#!/bin/bash
@@ -31,7 +31,7 @@ for hole in holes
     
         echo "running...."
     
-        julia RunCells.jl --T1 %.4f --T2 %.4f --mesh %d """, T, T, hole))
+        julia RunCells.jl --T1 %.4f --T2 %.4f --mesh %d """, T, T, h))
     end
     run(`sbatch $fname`)
 end
