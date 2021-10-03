@@ -3,11 +3,11 @@ using Printf
 n = 1
 m = 1
 t = 1
-T1s = [2.75]
-T2s = [2.75]
+T1s = [2.0]
+T2s = [2.0]
 ls = [0.00275]
 Ls = [0.02]
-meshs = [true, false]
+meshs = [false]
 
 mkpath("logs")
 

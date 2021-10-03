@@ -15,7 +15,7 @@ for i in 1:(n*m)
     fname = @sprintf("run_gap_%.4f_len_%.4f_T1_%.4f_T2_%.4f.slurm", l, L, T1, T2)
     open(fname, "w") do f
         write(f,@sprintf("""#!/bin/bash
-        #SBATCH -n 24 # Number of cores requested
+        #SBATCH -n 1 # Number of cores requested
         #SBATCH -N 1 # Ensure that all cores are on one machine
         #SBATCH -t 0-08:00 # Runtime in minutes
         #SBATCH -p shared # Partition to submit to

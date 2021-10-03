@@ -3,17 +3,19 @@ using Printf
 T1 = 2.0
 l = 0.0025
 L = 0.04
-T2s = [0.7, 2.8]
-flows = [1, 2, 4, 6]
+# T2s = [0.7, 2.8]
+T2s = [0.7]
+# flows = [1, 2, 4, 6]
+flows = [2]
 
 mkpath("logs")
 
 for flow in flows
     for T2 in T2s
-        fname = @sprintf("run_m_%.4f_T2_%.4f_flow_.%.4fslurm", m, T2, flow)
+        fname = @sprintf("run_T2_%.4f_flow_.%.4f.slurm", T2, flow)
         open(fname, "w") do f
             write(f,@sprintf("""#!/bin/bash
-            #SBATCH -n 24 # Number of cores requested
+            #SBATCH -n 2 # Number of cores requested
             #SBATCH -N 1 # Ensure that all cores are on one machine
             #SBATCH -t 0-08:00 # Runtime in minutes
             #SBATCH -p shared # Partition to submit to

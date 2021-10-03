@@ -24,8 +24,9 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh, flow)
     zmin = 65.09E-3
     zend = zmin+lstage+1E-3
     zmaxs = [zend]
-    σs = 140E-12 .+ 1E-12 .* [227, 231, 242] # collision cross section (m^2)
-    Ms = [23.0, 40.0, 173.0] # mass of molecule (AMU)
+
+    σs = [pi * (327E-12).^2] #pi .* (140E-12 .+ 1E-12 .* [227, 231, 242]).^2 # collision cross section (m^2)
+    Ms = [23.0] #[23.0, 40.0, 173.0] # mass of molecule (AMU)
 
     # Paths
     PROG_PATH = pwd()
@@ -153,7 +154,7 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh, flow)
     end
 
     cd(RUN_PATH)
-    run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
+    # run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
 
     if he == "he3"
         m = 3.0
