@@ -473,6 +473,11 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
         else
             time += dist / LinearAlgebra.norm(v)
             collides += 1
+            # Temporary feature: report when the particle moves each centimeter
+            if floor(100*xnext[3]) > floor(100*x[3]) && x[3] > max_x_geom
+                println(@sprintf("%d %e %e %e %e %e %e %e %e %e %d %e", i, 
+                x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time))
+            end
         end
         if !isnothing(stats)
             updateStats!(stats, x, v, time, collides, dist)
@@ -512,6 +517,7 @@ function SimulateParticles(
 
     bounds = Matrix(CSV.read(geomFile, header = ["min","max"], skipto=6, limit=2,ignorerepeated=true,delim=' '))
     geom = Matrix(CSV.read(geomFile, header=["ID","x1","y1","x2","y2"],skipto=10, ignorerepeated=true,delim=' '))
+    max_x_geom = maximum(geom[:,[2,4]])
     griddf = CSV.read(gridFile, header=["x","y","T","ρ","ρm","vx","vy","vz"],skipto=10,ignorerepeated=true,delim=' ')
 
     # Reorder columns and only include grid cells with data
