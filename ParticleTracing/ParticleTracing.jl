@@ -443,7 +443,7 @@ end
 
 Accepts as input the position of a particle xinit, its velocity v, the function interp!, which takes as input a position and a vector and updates the vector to describe the gas [x, y, vgx, vgy, vgz, T, ρ], and the function getCollision(x1, x2), which returns whether if the segment from x1 to x2 intersects geometry. Computes the path of the particle until it getCollision returns true. Returns a vector of simulation results with elements x, y, z, xnext, ynext, znext, vx, vy, vz, collides, time.
 """
-@inline function propagate(xinit, vin, interp!, getCollision, table, ω=0.0, zmin=-Inf, zmax=Inf, pflip=0.0, stats=nothing, max_x_geom=Inf)
+@inline function propagate(xinit, vin, interp!, getCollision, table, ω=0.0, zmin=-Inf, zmax=Inf, pflip=0.0, stats=nothing, max_x_geom=Inf, idx=0)
     x = deepcopy(xinit)
     props = zeros(8) # x, y, vgx, vgy, vgz, T, ρ, dmin
     interp!(props, x)
@@ -475,7 +475,7 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
             collides += 1
             # Temporary feature: report when the particle moves each centimeter
             if floor(100*xnext[3]) > floor(100*x[3]) && x[3] > max_x_geom
-                println(@sprintf("%d %e %e %e %e %e %e %e %e %e %d %e", i, 
+                println(@sprintf("%d %e %e %e %e %e %e %e %e %e %d %e", idx, 
                 x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time))
             end
         end
@@ -615,7 +615,7 @@ function SimulateParticles(
             stats = StatsArray(bounds[2,1], bounds[2,2], rbins, bounds[1,1], bounds[1,2], zbins)
         end
         xpart, vpart = generateParticle()
-        outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision, table, ω, zmin, zmax, pflip, stats, max_x_geom)
+        outputs[i,:] .= propagate(xpart, vpart, interpolate!, getCollision, table, ω, zmin, zmax, pflip, stats, max_x_geom, i)
         colltype = getCollision(outputs[i,[1,2,3]], outputs[i,[4,5,6]])
         if !isnothing(savestats)
             merge!(allstats, stats)
