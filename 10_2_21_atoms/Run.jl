@@ -3,10 +3,10 @@ using Printf
 T1 = 2.0
 l = 0.0025
 L = 0.04
-# T2s = [0.7, 2.8]
-T2s = [0.7]
-# flows = [1, 2, 4, 6]
-flows = [2]
+T2s = [0.7, 2.8]
+# T2s = [0.7]
+flows = [1, 2, 4, 6]
+# flows = [2]
 
 mkpath("logs")
 
