@@ -15,7 +15,7 @@ for flow in flows
         fname = @sprintf("run_T2_%.4f_flow_.%.4f.slurm", T2, flow)
         open(fname, "w") do f
             write(f,@sprintf("""#!/bin/bash
-            #SBATCH -n 2 # Number of cores requested
+            #SBATCH -n 24 # Number of cores requested
             #SBATCH -N 1 # Ensure that all cores are on one machine
             #SBATCH -t 0-08:00 # Runtime in minutes
             #SBATCH -p shared # Partition to submit to
