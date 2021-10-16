@@ -19,11 +19,11 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh, flow)
     facethickness = 0.6mm
 
     # Particle simulation parameters
-    n_particles = 1000000
-    omegas = [0.0]
+    n_particles = 2000000
+    omega = 0.0
     zmin = 65.09E-3
     zend = zmin+lstage+1E-3
-    zmaxs = [zend]
+    zmax = zend
 
     σs = pi .* (140E-12 .+ 1E-12 .* [227, 380, 231, 242]).^2 # collision cross section (m^2)
     Ms = [23.0, 23.0, 40.0, 173.0] # mass of molecule (AMU)
@@ -154,7 +154,7 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh, flow)
     end
 
     cd(RUN_PATH)
-    run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
+    # run(pipeline(SPARTA_CMD, stdin="in.cell"), wait=true)
 
     if he == "he3"
         m = 3.0
@@ -162,35 +162,32 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh, flow)
         m = 4.0
     end
 
-    for (i, omega) in enumerate(omegas)
-        for (j, M) in enumerate(Ms)
-            fname = @sprintf("run_omega_%.5f_M_%.1f.cell",omega, M)
-            open(fname, "w") do f
-                write(f,@sprintf("""#!/bin/bash
-                #SBATCH -n 16 # Number of cores requested
-                #SBATCH -N 1 # Ensure that all cores are on one machine
-                #SBATCH -t 0-08:00 # Runtime in minutes
-                #SBATCH -p shared # Partition to submit to
-                #SBATCH --mem-per-cpu 1024 # Memory per cpu in MB
-                #SBATCH --open-mode=append
-                #SBATCH -o data/particles_sigma_%.5f_M_%.1f_zmax_%.5f_pflip_%.5f_job_%%j.out # Standard out goes to this file
-                #SBATCH -e data/particles_sigma_%.5f_M_%.1f_zmax_%.5f_pflip_%.5f_job_%%j.err # Standard err goes to this filehostname
+    for (j, M) in enumerate(Ms)
+        mkpath("scripts")
+        fname = @sprintf("scripts/run_sigma_%.5e_M_%.1f.cell",σs[j], M)
+        open(fname, "w") do f
+            write(f,@sprintf("""#!/bin/bash
+            #SBATCH -n 24 # Number of cores requested
+            #SBATCH -N 1 # Ensure that all cores are on one machine
+            #SBATCH -t 0-08:00 # Runtime in minutes
+            #SBATCH -p shared # Partition to submit to
+            #SBATCH --mem-per-cpu 1024 # Memory per cpu in MB
+            #SBATCH --open-mode=append
+            #SBATCH -o data/particles_sigma_%.5e_M_%.1f_job_%%j.out # Standard out goes to this file
+            #SBATCH -e data/particles_sigma_%.5e_M_%.1f_job_%%j.err # Standard err goes to this filehostname
 
-                module load intel/19.0.5-fasrc01 openmpi/4.0.2-fasrc01 fftw/3.3.8-fasrc01 cmake/3.12.1-fasrc01 Anaconda3/2019.10 python/3.7.7-fasrc01
-                module list
+            module load intel/19.0.5-fasrc01 openmpi/4.0.2-fasrc01 fftw/3.3.8-fasrc01 cmake/3.12.1-fasrc01 Anaconda3/2019.10 python/3.7.7-fasrc01
+            module list
 
-                export OMP_PROC_BIND=spread
-                export OMP_PLACES=threads
-                export JULIA_NUM_THREADS=\$SLURM_CPUS_ON_NODE
+            export OMP_PROC_BIND=spread
+            export OMP_PLACES=threads
+            export JULIA_NUM_THREADS=\$SLURM_CPUS_ON_NODE
 
-                cd data
-                pwd
-                echo "running...."
+            cd data
 
-                julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T 2.0 -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --zmin %.5f --zmax %.5f --saveall 0""", σs[j], M, zmaxs[i], pflip, σs[j], M, zmaxs[i], pflip, n_particles, omega, pflip, m, M, σs[j], zmin, zmaxs[i]))
-            end
-            run(`sbatch $fname`)
+            julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T %.5f -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --zmin %.5f --zmax %.5f --saveall 0""", σs[j], M, σs[j], M, T1, n_particles, omega, pflip, m, M, σs[j], zmin, zmax))
         end
+        run(`sbatch $fname`)
     end
     cd(PROG_PATH)
 end
