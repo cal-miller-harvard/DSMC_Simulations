@@ -473,8 +473,8 @@ Accepts as input the position of a particle xinit, its velocity v, the function 
         else
             time += dist / LinearAlgebra.norm(v)
             collides += 1
-            # Temporary feature: report when the particle moves each centimeter
-            if floor(100*xnext[3]) > floor(100*x[3]) && x[3] > max_x_geom
+            # Temporary feature: report when the particle moves each millimeter
+            if floor(1000*xnext[3]) > floor(1000*x[3]) && xnext[3] > max_x_geom
                 println(@sprintf("%d %e %e %e %e %e %e %e %e %e %d %e", -idx, 
                 x[1], x[2], x[3], xnext[1], xnext[2], xnext[3], v[1], v[2], v[3], collides, time))
             end

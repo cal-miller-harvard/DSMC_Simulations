@@ -173,8 +173,8 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh, flow)
             #SBATCH -p shared # Partition to submit to
             #SBATCH --mem-per-cpu 1024 # Memory per cpu in MB
             #SBATCH --open-mode=append
-            #SBATCH -o data/particles_sigma_%.5e_M_%.1f_job_%%j.out # Standard out goes to this file
-            #SBATCH -e data/particles_sigma_%.5e_M_%.1f_job_%%j.err # Standard err goes to this filehostname
+            #SBATCH -o data/particles_sigma_%.5e_M_%.1f_job_%%j_start_at_end.out # Standard out goes to this file
+            #SBATCH -e data/particles_sigma_%.5e_M_%.1f_job_%%j_start_at_end.err # Standard err goes to this filehostname
 
             module load intel/19.0.5-fasrc01 openmpi/4.0.2-fasrc01 fftw/3.3.8-fasrc01 cmake/3.12.1-fasrc01 Anaconda3/2019.10 python/3.7.7-fasrc01
             module list
@@ -185,7 +185,7 @@ function runsim(lgap, lstage, T1, T2, pflip, ismesh, flow)
 
             cd data
 
-            julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.035 -T %.5f -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --zmin %.5f --zmax %.5f --saveall 0""", σs[j], M, σs[j], M, T1, n_particles, omega, pflip, m, M, σs[j], zmin, zmax))
+            julia /n/home03/calmiller/DSMC_Simulations/ParticleTracing/ParticleTracing.jl -z 0.06 -T %.5f -n %d ./cell.surfs ./DS2FF.DAT --omega %.5f --pflip %.5f -m %.5f -M %.5f --sigma %.5E --zmin %.5f --zmax %.5f --saveall 0""", σs[j], M, σs[j], M, T1, n_particles, omega, pflip, m, M, σs[j], zmin, zmax))
         end
         run(`sbatch $fname`)
     end
